@@ -778,62 +778,242 @@ def main():
             if response.data and len(response.data) > 0:
                 df = pd.DataFrame(response.data)
 
-                # 오차 계산
+                # 오차 계산 (DB에 error_rate가 있지만 호환성을 위해 계산)
                 df['error'] = df['actual_nakchalhahan_price'] - df['predicted_nakchalhahan_price']
                 df['error_pct'] = (df['error'] / df['actual_nakchalhahan_price']) * 100
                 df['abs_error_pct'] = df['error_pct'].abs()
 
-                # 모델별 통계
-                st.markdown("### 📊 모델별 성능")
+                # 날짜 변환
+                df['created_at'] = pd.to_datetime(df['created_at'])
+                df['date'] = df['created_at'].dt.date
 
-                model_stats = df.groupby('model_name').agg({
-                    'abs_error_pct': ['mean', 'std', 'count'],
-                    'error': ['mean', 'std']
+                # ============ 필터링 UI ============
+                st.markdown("### 🔍 필터 옵션")
+
+                col1, col2, col3, col4 = st.columns(4)
+
+                with col1:
+                    # 모델 선택
+                    all_models = df['model_name'].unique().tolist()
+                    selected_models = st.multiselect(
+                        "모델 선택",
+                        options=all_models,
+                        default=all_models,
+                        help="분석할 모델을 선택하세요"
+                    )
+
+                with col2:
+                    # 기간 선택
+                    min_date = df['date'].min()
+                    max_date = df['date'].max()
+                    date_range = st.date_input(
+                        "예측 기간",
+                        value=(min_date, max_date),
+                        min_value=min_date,
+                        max_value=max_date,
+                        help="분석 기간을 선택하세요"
+                    )
+
+                with col3:
+                    # 오차율 범위
+                    error_range = st.slider(
+                        "오차율 범위 (%)",
+                        min_value=-20.0,
+                        max_value=20.0,
+                        value=(-10.0, 10.0),
+                        step=0.5,
+                        help="표시할 오차율 범위를 선택하세요"
+                    )
+
+                with col4:
+                    # 공사명 검색
+                    search_term = st.text_input(
+                        "공사명 검색",
+                        placeholder="예: 도로",
+                        help="공사명에 포함된 키워드로 검색"
+                    )
+
+                # 필터 적용
+                filtered_df = df.copy()
+
+                # 모델 필터
+                if selected_models:
+                    filtered_df = filtered_df[filtered_df['model_name'].isin(selected_models)]
+
+                # 날짜 필터
+                if isinstance(date_range, tuple) and len(date_range) == 2:
+                    start_date, end_date = date_range
+                    filtered_df = filtered_df[(filtered_df['date'] >= start_date) & (filtered_df['date'] <= end_date)]
+
+                # 오차율 필터
+                filtered_df = filtered_df[(filtered_df['error_pct'] >= error_range[0]) & (filtered_df['error_pct'] <= error_range[1])]
+
+                # 공사명 검색
+                if search_term:
+                    filtered_df = filtered_df[filtered_df['project_name'].str.contains(search_term, case=False, na=False)]
+
+                # 필터 결과 표시
+                st.caption(f"📊 총 {len(df)}건 중 {len(filtered_df)}건 표시")
+
+                if len(filtered_df) == 0:
+                    st.warning("⚠️ 필터 조건에 맞는 데이터가 없습니다.")
+                    st.stop()
+
+                # ============ 모델별 성능 요약 ============
+                st.markdown("---")
+                st.markdown("### 📊 모델별 성능 요약")
+
+                model_stats = filtered_df.groupby('model_name').agg({
+                    'abs_error_pct': ['mean', 'std', 'count']
                 }).round(2)
 
-                model_stats.columns = ['MAPE (%)', '표준편차 (%)', '예측 건수', '평균 오차 (원)', '오차 표준편차 (원)']
-
+                model_stats.columns = ['MAPE (%)', '표준편차 (%)', '예측 건수']
                 st.dataframe(model_stats, use_container_width=True)
 
-                # 시각화
+                # ============ 차트 섹션 ============
+                st.markdown("---")
+                st.markdown("### 📈 상세 분석 차트")
+
+                # Row 1: 시간별 정확도 추이 & 오차율 분포
                 col1, col2 = st.columns(2)
 
                 with col1:
-                    # 모델별 MAPE 비교
-                    fig = go.Figure(data=[
-                        go.Bar(
-                            x=model_stats.index,
-                            y=model_stats['MAPE (%)'],
-                            text=model_stats['MAPE (%)'],
-                            textposition='auto',
-                            marker_color=['#1f77b4', '#ff7f0e', '#2ca02c']
-                        )
-                    ])
+                    st.markdown("#### 📅 시간에 따른 모델 정확도 추이")
+                    # 날짜별 평균 오차율
+                    time_stats = filtered_df.groupby(['date', 'model_name'])['abs_error_pct'].mean().reset_index()
+
+                    fig = go.Figure()
+                    for model in selected_models:
+                        model_data = time_stats[time_stats['model_name'] == model]
+                        fig.add_trace(go.Scatter(
+                            x=model_data['date'],
+                            y=model_data['abs_error_pct'],
+                            mode='lines+markers',
+                            name=model,
+                            line=dict(width=2)
+                        ))
+
                     fig.update_layout(
-                        title="모델별 평균 오차율 (MAPE)",
-                        xaxis_title="모델",
-                        yaxis_title="MAPE (%)",
-                        height=400
+                        xaxis_title="날짜",
+                        yaxis_title="평균 절대 오차율 (%)",
+                        height=350,
+                        hovermode='x unified'
                     )
                     st.plotly_chart(fig, use_container_width=True)
 
                 with col2:
-                    # 예측 vs 실제 산점도
+                    st.markdown("#### 📊 오차율 분포 히스토그램")
                     fig = go.Figure()
 
-                    for model in df['model_name'].unique():
-                        model_df = df[df['model_name'] == model]
+                    for model in selected_models:
+                        model_data = filtered_df[filtered_df['model_name'] == model]
+                        fig.add_trace(go.Histogram(
+                            x=model_data['error_pct'],
+                            name=model,
+                            opacity=0.7,
+                            nbinsx=20
+                        ))
+
+                    fig.update_layout(
+                        barmode='overlay',
+                        xaxis_title="오차율 (%)",
+                        yaxis_title="빈도",
+                        height=350
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+
+                # Row 2: 금액별 정확도 & 모델 승률
+                col1, col2 = st.columns(2)
+
+                with col1:
+                    st.markdown("#### 💰 금액 구간별 예측 정확도")
+                    # 추정가격 구간 생성
+                    filtered_df['price_range'] = pd.cut(
+                        filtered_df['chujeong_price'],
+                        bins=[0, 100000000, 500000000, 1000000000, float('inf')],
+                        labels=['0~1억', '1~5억', '5~10억', '10억 이상']
+                    )
+
+                    price_stats = filtered_df.groupby(['price_range', 'model_name'])['abs_error_pct'].mean().reset_index()
+
+                    fig = go.Figure()
+                    for model in selected_models:
+                        model_data = price_stats[price_stats['model_name'] == model]
+                        fig.add_trace(go.Bar(
+                            x=model_data['price_range'],
+                            y=model_data['abs_error_pct'],
+                            name=model,
+                            text=model_data['abs_error_pct'].round(2),
+                            textposition='auto'
+                        ))
+
+                    fig.update_layout(
+                        barmode='group',
+                        xaxis_title="추정가격 구간",
+                        yaxis_title="평균 MAPE (%)",
+                        height=350
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+
+                with col2:
+                    st.markdown("#### 🏆 모델별 승률 (최고 정확도 달성)")
+                    # 각 예측 그룹에서 최고 성능 모델 찾기
+                    best_models = filtered_df.loc[filtered_df.groupby('prediction_group_id')['abs_error_pct'].idxmin()]
+                    win_counts = best_models['model_name'].value_counts()
+
+                    fig = go.Figure(data=[go.Pie(
+                        labels=win_counts.index,
+                        values=win_counts.values,
+                        hole=0.4,
+                        textinfo='label+percent',
+                        marker=dict(colors=['#1f77b4', '#ff7f0e', '#2ca02c'])
+                    )])
+
+                    fig.update_layout(
+                        height=350,
+                        showlegend=True
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+
+                # Row 3: 박스플롯 (전체 폭)
+                st.markdown("#### 📦 모델별 오차율 분포 (박스플롯)")
+                fig = go.Figure()
+
+                for model in selected_models:
+                    model_data = filtered_df[filtered_df['model_name'] == model]
+                    fig.add_trace(go.Box(
+                        y=model_data['error_pct'],
+                        name=model,
+                        boxmean='sd'  # 평균과 표준편차 표시
+                    ))
+
+                fig.update_layout(
+                    yaxis_title="오차율 (%)",
+                    height=400,
+                    showlegend=True
+                )
+                st.plotly_chart(fig, use_container_width=True)
+
+                # Row 4: 예측 vs 실제 & 월별 활동
+                col1, col2 = st.columns(2)
+
+                with col1:
+                    st.markdown("#### 🎯 예측 vs 실제")
+                    fig = go.Figure()
+
+                    for model in selected_models:
+                        model_df = filtered_df[filtered_df['model_name'] == model]
                         fig.add_trace(go.Scatter(
                             x=model_df['predicted_nakchalhahan_price'],
                             y=model_df['actual_nakchalhahan_price'],
                             mode='markers',
                             name=model,
-                            marker=dict(size=10)
+                            marker=dict(size=8)
                         ))
 
                     # 대각선 (완벽한 예측선)
-                    min_val = min(df['predicted_nakchalhahan_price'].min(), df['actual_nakchalhahan_price'].min())
-                    max_val = max(df['predicted_nakchalhahan_price'].max(), df['actual_nakchalhahan_price'].max())
+                    min_val = min(filtered_df['predicted_nakchalhahan_price'].min(), filtered_df['actual_nakchalhahan_price'].min())
+                    max_val = max(filtered_df['predicted_nakchalhahan_price'].max(), filtered_df['actual_nakchalhahan_price'].max())
                     fig.add_trace(go.Scatter(
                         x=[min_val, max_val],
                         y=[min_val, max_val],
@@ -843,37 +1023,98 @@ def main():
                     ))
 
                     fig.update_layout(
-                        title="예측 vs 실제",
                         xaxis_title="예측 낙찰하한가",
                         yaxis_title="실제 낙찰하한가",
-                        height=400
+                        height=350
                     )
                     st.plotly_chart(fig, use_container_width=True)
 
-                # 최근 10건 상세
-                st.markdown("---")
-                st.markdown("### 📋 최근 예측 상세")
+                with col2:
+                    st.markdown("#### 📅 월별 예측 활동 및 정확도")
+                    # 월별 데이터 집계
+                    filtered_df['month'] = filtered_df['created_at'].dt.to_period('M').astype(str)
+                    monthly_stats = filtered_df.groupby('month').agg({
+                        'prediction_group_id': 'nunique',  # 예측 건수
+                        'abs_error_pct': 'mean'  # 평균 MAPE
+                    }).reset_index()
+                    monthly_stats.columns = ['month', 'count', 'mape']
 
-                recent = df.sort_values('created_at', ascending=False).head(10)[[
-                    'created_at', 'model_name', 'predicted_nakchalhahan_price',
-                    'actual_nakchalhahan_price', 'error', 'error_pct'
+                    # 이중 Y축 차트
+                    fig = go.Figure()
+
+                    # 예측 건수 (바)
+                    fig.add_trace(go.Bar(
+                        x=monthly_stats['month'],
+                        y=monthly_stats['count'],
+                        name='예측 건수',
+                        yaxis='y',
+                        marker_color='lightblue'
+                    ))
+
+                    # 평균 MAPE (라인)
+                    fig.add_trace(go.Scatter(
+                        x=monthly_stats['month'],
+                        y=monthly_stats['mape'],
+                        name='평균 MAPE',
+                        yaxis='y2',
+                        mode='lines+markers',
+                        line=dict(color='red', width=2)
+                    ))
+
+                    fig.update_layout(
+                        xaxis_title="월",
+                        yaxis=dict(title="예측 건수", side='left'),
+                        yaxis2=dict(title="평균 MAPE (%)", overlaying='y', side='right'),
+                        height=350,
+                        hovermode='x unified'
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+
+                # ============ 전체 데이터 테이블 ============
+                st.markdown("---")
+                st.markdown("### 📋 전체 예측 내역")
+
+                # 데이터 준비
+                display_df = filtered_df[[
+                    'created_at', 'project_name', 'model_name',
+                    'predicted_nakchalhahan_price', 'actual_nakchalhahan_price',
+                    'error', 'error_pct', 'abs_error_pct'
                 ]].copy()
 
-                recent.columns = ['예측일시', '모델', '예측값', '실제값', '오차 (원)', '오차율 (%)']
-                recent['예측일시'] = pd.to_datetime(recent['예측일시']).dt.strftime('%Y-%m-%d %H:%M')
+                display_df.columns = [
+                    '예측일시', '공사명', '모델',
+                    '예측값', '실제값', '오차(원)', '오차율(%)', '절대오차율(%)'
+                ]
 
-                for col in ['예측값', '실제값', '오차 (원)']:
-                    recent[col] = recent[col].apply(format_currency)
+                # 포맷팅
+                display_df['예측일시'] = pd.to_datetime(display_df['예측일시']).dt.strftime('%Y-%m-%d %H:%M')
+                display_df['예측값'] = display_df['예측값'].apply(lambda x: f"{x:,.0f}")
+                display_df['실제값'] = display_df['실제값'].apply(lambda x: f"{x:,.0f}")
+                display_df['오차(원)'] = display_df['오차(원)'].apply(lambda x: f"{x:+,.0f}")
+                display_df['오차율(%)'] = display_df['오차율(%)'].apply(lambda x: f"{x:+.2f}%")
+                display_df['절대오차율(%)'] = display_df['절대오차율(%)'].apply(lambda x: f"{x:.2f}%")
 
-                recent['오차율 (%)'] = recent['오차율 (%)'].apply(lambda x: f"{x:.2f}%")
+                # 다운로드 버튼
+                col1, col2, col3 = st.columns([1, 1, 4])
+                with col1:
+                    csv = display_df.to_csv(index=False, encoding='utf-8-sig')
+                    st.download_button(
+                        label="📥 CSV 다운로드",
+                        data=csv,
+                        file_name=f"prediction_accuracy_{pd.Timestamp.now().strftime('%Y%m%d')}.csv",
+                        mime="text/csv"
+                    )
 
-                st.dataframe(recent, use_container_width=True)
+                # 테이블 표시
+                st.dataframe(display_df, use_container_width=True, height=400)
 
             else:
                 st.info("📭 실제값이 입력된 예측이 아직 없습니다.")
 
         except Exception as e:
             st.error(f"⚠️ 데이터 분석 실패: {str(e)}")
+            import traceback
+            st.code(traceback.format_exc())
 
 if __name__ == "__main__":
     main()
