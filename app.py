@@ -243,6 +243,22 @@ def format_currency(value):
     """통화 포맷 (천 단위 쉼표)"""
     return f"{value:,.0f}"
 
+def parse_number_input(input_str):
+    """쉼표가 포함된 문자열을 숫자로 변환"""
+    if not input_str or input_str.strip() == "":
+        return 0
+    try:
+        # 쉼표 제거 후 숫자 변환
+        return int(input_str.replace(",", "").strip())
+    except:
+        return 0
+
+def format_number_for_display(value):
+    """숫자를 쉼표 포맷 문자열로 변환"""
+    if value == 0:
+        return ""
+    return f"{value:,}"
+
 def main():
     # 헤더
     st.markdown('<div class="main-header">📊 낙찰하한가 예측 시스템</div>', unsafe_allow_html=True)
@@ -383,32 +399,29 @@ def main():
         col1, col2 = st.columns(2)
 
         with col1:
-            chujeong_price = st.number_input(
+            chujeong_price_str = st.text_input(
                 "추정가격 (원)",
-                min_value=0,
-                value=default_chujeong,
-                step=1000000,
-                format="%d",
-                help="입찰 공고에 명시된 추정가격 (예: 100,000,000)"
+                value=format_number_for_display(default_chujeong),
+                placeholder="예: 100,000,000",
+                help="입찰 공고에 명시된 추정가격 (쉼표 입력 가능)"
             )
+            chujeong_price = parse_number_input(chujeong_price_str)
 
-            gichogeum = st.number_input(
+            gichogeum_str = st.text_input(
                 "기초금액 (원)",
-                min_value=0,
-                value=default_gichogeum,
-                step=1000000,
-                format="%d",
-                help="예가 산정의 기준이 되는 금액 (예: 95,000,000)"
+                value=format_number_for_display(default_gichogeum),
+                placeholder="예: 95,000,000",
+                help="예가 산정의 기준이 되는 금액 (쉼표 입력 가능)"
             )
+            gichogeum = parse_number_input(gichogeum_str)
 
-            a_value = st.number_input(
+            a_value_str = st.text_input(
                 "A값 (원)",
-                min_value=0,
-                value=int(default_a_value),
-                step=100000,
-                format="%d",
-                help="낙찰하한율 계산에 사용되는 A값 (없으면 0)"
+                value=format_number_for_display(int(default_a_value)),
+                placeholder="예: 5,000,000",
+                help="낙찰하한율 계산에 사용되는 A값 (쉼표 입력 가능, 없으면 0)"
             )
+            a_value = parse_number_input(a_value_str)
 
         with col2:
             nakchalhahan_rate = st.number_input(
@@ -442,6 +455,14 @@ def main():
             # 공사명 필수 검증
             if not project_name or project_name.strip() == "":
                 st.error("⚠️ 공사명을 입력해주세요!")
+                st.stop()
+
+            # 금액 입력 검증
+            if chujeong_price == 0:
+                st.error("⚠️ 추정가격을 입력해주세요!")
+                st.stop()
+            if gichogeum == 0:
+                st.error("⚠️ 기초금액을 입력해주세요!")
                 st.stop()
 
             # 입력 데이터 준비
@@ -620,14 +641,59 @@ def main():
                         model_order = ['ridge', 'linear', 'ensemble']
                         model_icons = {'ridge': '⭐', 'linear': '⚡', 'ensemble': '🎯'}
 
+                        # 오차가 있는 경우 최소 오차 모델 찾기
+                        best_model = None
+                        if pd.notna(actual_value):
+                            min_abs_error = float('inf')
+                            for model_type in model_order:
+                                model_row = group_df[group_df['model_type'] == model_type].iloc[0]
+                                if pd.notna(model_row.get('error_rate')):
+                                    abs_error = abs(model_row['error_rate'])
+                                    if abs_error < min_abs_error:
+                                        min_abs_error = abs_error
+                                        best_model = model_type
+
                         for idx, model_type in enumerate(model_order):
                             model_row = group_df[group_df['model_type'] == model_type].iloc[0]
 
                             with cols[idx]:
                                 icon = model_icons.get(model_type, '📊')
-                                st.markdown(f"**{icon} {model_row['model_name']}**")
+                                is_best = (model_type == best_model)
+                                best_badge = " ✅ 최소오차" if is_best else ""
+
+                                st.markdown(f"**{icon} {model_row['model_name']}{best_badge}**")
                                 st.metric("예측 낙찰하한가", format_currency(model_row['predicted_nakchalhahan_price']) + "원")
                                 st.caption(f"예가: {model_row['predicted_yega']:.4f}%")
+
+                                # 오차 정보 표시 (실제값이 입력된 경우)
+                                if pd.notna(actual_value) and pd.notna(model_row.get('error_amount')):
+                                    st.markdown("---")
+                                    st.markdown(f"**실제**: {format_currency(actual_value)}원")
+
+                                    error_amount = model_row['error_amount']
+                                    error_rate = model_row['error_rate']
+
+                                    # 오차 부호에 따른 표시
+                                    error_sign = "+" if error_amount >= 0 else ""
+
+                                    st.markdown(f"**오차**: {error_sign}{format_currency(abs(error_amount))}원")
+                                    st.markdown(f"**오차율**: {error_sign}{error_rate:.2f}%")
+
+                                    # 프로그레스 바 (오차율 시각화)
+                                    abs_error_rate = abs(error_rate)
+                                    # 0-5% 범위로 정규화 (5% 이상은 100%로 표시)
+                                    progress_value = min(abs_error_rate / 5.0, 1.0)
+
+                                    # 색상 선택 (중급 시각화)
+                                    if abs_error_rate <= 1:
+                                        color = "🟢"  # 매우 우수
+                                    elif abs_error_rate <= 3:
+                                        color = "🟡"  # 우수
+                                    else:
+                                        color = "🟠"  # 보통
+
+                                    st.progress(progress_value)
+                                    st.caption(f"{color} 정확도: {100 - abs_error_rate:.1f}%")
 
                         # 실제값 입력 섹션
                         st.markdown("---")
@@ -635,14 +701,16 @@ def main():
 
                         col1, col2, col3 = st.columns([2, 2, 1])
                         with col1:
-                            actual_input = st.number_input(
+                            # 기존 값 포맷팅
+                            default_actual_value = int(actual_value) if pd.notna(actual_value) else 0
+                            actual_input_str = st.text_input(
                                 "실제 낙찰하한가 (원)",
-                                min_value=0,
-                                value=int(actual_value) if pd.notna(actual_value) else 0,
-                                step=100000,
-                                format="%d",
+                                value=format_number_for_display(default_actual_value),
+                                placeholder="예: 85,000,000",
+                                help="실제 낙찰하한가 (쉼표 입력 가능)",
                                 key=f"actual_{group_id}"
                             )
+                            actual_input = parse_number_input(actual_input_str)
 
                         with col2:
                             # 기존 날짜 값 가져오기
@@ -667,19 +735,28 @@ def main():
                             st.markdown("<br>", unsafe_allow_html=True)
                             if st.button("💾 저장", type="primary", use_container_width=True, key=f"save_{group_id}"):
                                 try:
-                                    # 해당 그룹의 모든 행 업데이트
-                                    update_data = {
-                                        "actual_nakchalhahan_price": float(actual_input),
-                                        "updated_at": datetime.now().isoformat()
-                                    }
+                                    # 해당 그룹의 각 모델별로 오차 계산 및 업데이트
+                                    for _, row in group_df.iterrows():
+                                        # 오차 계산
+                                        predicted_value = row['predicted_nakchalhahan_price']
+                                        error_amount = float(actual_input) - predicted_value
+                                        error_rate = (error_amount / float(actual_input)) * 100 if actual_input > 0 else 0
 
-                                    # 날짜가 선택된 경우에만 추가
-                                    if actual_date:
-                                        update_data["bid_announcement_date"] = actual_date.isoformat()
+                                        update_data = {
+                                            "actual_nakchalhahan_price": float(actual_input),
+                                            "error_amount": float(error_amount),
+                                            "error_rate": float(error_rate),
+                                            "updated_at": datetime.now().isoformat()
+                                        }
 
-                                    supabase.table("predictions").update(update_data).eq("prediction_group_id", group_id).execute()
+                                        # 날짜가 선택된 경우에만 추가
+                                        if actual_date:
+                                            update_data["bid_announcement_date"] = actual_date.isoformat()
 
-                                    st.success("✅ 실제값이 저장되었습니다!")
+                                        # 각 레코드 개별 업데이트 (id 기준)
+                                        supabase.table("predictions").update(update_data).eq("id", row['id']).execute()
+
+                                    st.success("✅ 실제값 및 오차 분석이 저장되었습니다!")
                                     st.rerun()
                                 except Exception as e:
                                     st.error(f"❌ 저장 실패: {str(e)}")
