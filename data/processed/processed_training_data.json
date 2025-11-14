@@ -1,0 +1,17 @@
+{
+  "metadata": {
+    "total_records": 0,
+    "region_mapping": {},
+    "sector_mapping": {},
+    "features": [
+      "지역_encoded",
+      "업종_encoded",
+      "기초금액",
+      "A값",
+      "기초금액_log",
+      "A값_비율"
+    ],
+    "target": "예가"
+  },
+  "data": []
+}

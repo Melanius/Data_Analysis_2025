@@ -1,0 +1,49 @@
+{
+  "development_phases": {
+    "Phase_1": {
+      "name": "데이터 분석 및 전처리",
+      "tasks": [
+        "Excel 데이터 로드 및 기본 분석",
+        "예가 타겟 변수 생성",
+        "카테고리 변수 인코딩",
+        "데이터 품질 확인 및 정제"
+      ],
+      "status": "ready"
+    },
+    "Phase_2": {
+      "name": "베이스라인 모델 개발",
+      "tasks": [
+        "LinearRegression 베이스라인 구현",
+        "RandomForest 모델 구현",
+        "XGBoost 모델 구현",
+        "모델 성능 비교"
+      ],
+      "status": "pending"
+    },
+    "Phase_3": {
+      "name": "웹 애플리케이션 개발",
+      "tasks": [
+        "Streamlit 인터페이스 구축",
+        "입력 폼 및 예측 결과 화면",
+        "예측 히스토리 관리",
+        "시각화 대시보드"
+      ],
+      "status": "pending"
+    },
+    "Phase_4": {
+      "name": "API 서버 구축",
+      "tasks": [
+        "FastAPI 서버 구현",
+        "예측 엔드포인트 개발",
+        "모델 로딩 및 서빙",
+        "API 문서화"
+      ],
+      "status": "pending"
+    }
+  },
+  "immediate_actions": [
+    "Python 패키지 환경 설정",
+    "데이터 분석 스크립트 실행",
+    "베이스라인 모델 프로토타입 개발"
+  ]
+}

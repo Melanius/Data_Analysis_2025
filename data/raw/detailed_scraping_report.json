@@ -1,0 +1,51 @@
+{
+  "test_datetime": "2025-11-07T15:26:43.038942",
+  "website_analysis": {
+    "base_url": "https://infose.info21c.net",
+    "data_url": "https://infose.info21c.net/info21c/bids/list?bidtype=con&bid_suc=suc",
+    "requires_login": true,
+    "csrf_protection": true
+  },
+  "login_test": {
+    "attempted": true,
+    "credentials_provided": true,
+    "multiple_field_combinations_tested": true
+  },
+  "data_extraction": {
+    "headers_found": [],
+    "headers_count": 0,
+    "expected_columns": [
+      "공고번호",
+      "공고명",
+      "발주기관",
+      "공고일자",
+      "개찰일자",
+      "지역",
+      "업종",
+      "추정가격",
+      "기초금액",
+      "예정가격",
+      "낙찰하한가",
+      "낙찰가격",
+      "낙찰율",
+      "하한율",
+      "A값",
+      "낙찰업체",
+      "낙찰업체_대표자",
+      "낙찰업체_사업자번호"
+    ],
+    "expected_count": 18
+  },
+  "comparison": {
+    "matching_columns": [],
+    "missing_columns": [],
+    "extra_columns": []
+  },
+  "recommendations": [
+    "1. 브라우저 개발자 도구로 실제 로그인 프로세스 분석",
+    "2. 정확한 폼 필드명과 CSRF 토큰 처리 방식 확인",
+    "3. 로그인 성공 후 쿠키/세션 관리 방법 파악",
+    "4. 테이블 구조와 페이지네이션 방식 분석",
+    "5. 데이터 추출을 위한 정확한 CSS 선택자 또는 XPath 정의"
+  ]
+}

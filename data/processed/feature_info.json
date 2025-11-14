@@ -1,0 +1,54 @@
+{
+  "input_features": {
+    "지역_encoded": {
+      "type": "categorical",
+      "description": "지역 카테고리를 정수로 인코딩",
+      "mapping": {
+        "경기도": 0,
+        "부산광역시": 1,
+        "서울특별시": 2
+      }
+    },
+    "업종_encoded": {
+      "type": "categorical",
+      "description": "업종 카테고리를 정수로 인코딩",
+      "mapping": {
+        "건축": 0,
+        "전기": 1,
+        "토목": 2
+      }
+    },
+    "기초금액": {
+      "type": "numeric",
+      "description": "입찰 기초금액 (원)",
+      "preprocessing": "원본 값 사용"
+    },
+    "기초금액_log": {
+      "type": "numeric",
+      "description": "기초금액의 로그 변환 (스케일 정규화용)",
+      "preprocessing": "log10 변환"
+    },
+    "A값": {
+      "type": "numeric",
+      "description": "낙찰하한가 계산용 A값 (원)",
+      "preprocessing": "원본 값 사용"
+    },
+    "A값_비율": {
+      "type": "numeric",
+      "description": "A값 / 기초금액 비율",
+      "preprocessing": "비율 계산"
+    }
+  },
+  "target_variable": {
+    "예가": {
+      "type": "numeric",
+      "description": "예정가격 / 기초금액 비율 (예측 대상)",
+      "range": "일반적으로 0.8 ~ 1.0"
+    }
+  },
+  "business_logic": {
+    "formula": "낙찰하한가 = (예정가격 - A값) × 낙찰하한율 + A값",
+    "where": "예정가격 = 기초금액 × 예가",
+    "goal": "예가를 예측하여 적정 낙찰하한가 산출"
+  }
+}

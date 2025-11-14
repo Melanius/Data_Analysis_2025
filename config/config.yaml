@@ -1,0 +1,60 @@
+# 낙찰하한가 예측 모델 설정
+
+# 데이터 경로
+data:
+  raw_dir: "data/raw"
+  processed_dir: "data/processed"
+  external_dir: "data/external"
+  
+# 모델 설정
+model:
+  test_size: 0.2
+  random_state: 42
+  cv_folds: 5
+  
+# 피쳐 엔지니어링
+features:
+  categorical_encoding: "target"  # onehot, target, label
+  numerical_scaling: "standard"   # standard, minmax, robust
+  handle_missing: "median"        # mean, median, mode, drop
+  
+# 모델 하이퍼파라미터
+models:
+  linear_regression:
+    fit_intercept: true
+    
+  random_forest:
+    n_estimators: 100
+    max_depth: 10
+    min_samples_split: 5
+    random_state: 42
+    
+  xgboost:
+    objective: "reg:squarederror"
+    max_depth: 6
+    learning_rate: 0.1
+    n_estimators: 100
+    random_state: 42
+    
+  lightgbm:
+    objective: "regression"
+    num_leaves: 31
+    learning_rate: 0.1
+    n_estimators: 100
+    random_state: 42
+
+# 평가 지표
+evaluation:
+  metrics: ["mae", "mape", "r2_score"]
+  target_mape: 0.05  # 5% 목표
+  
+# MLflow 설정
+mlflow:
+  experiment_name: "bid_prediction"
+  tracking_uri: "mlruns"
+  
+# API 설정
+api:
+  host: "0.0.0.0"
+  port: 8000
+  debug: false

@@ -1,0 +1,50 @@
+{
+  "start_time": "2025-11-07T23:25:11.239068",
+  "steps": [
+    {
+      "step": 1,
+      "description": "낙찰하한가 빈 행 삭제",
+      "original_count": 3005,
+      "final_count": 2957,
+      "removed_count": 48
+    },
+    {
+      "step": 2,
+      "description": "낙찰하한율 계산",
+      "stats": {
+        "mean": 88.31015547666128,
+        "min": 79.99500000010637,
+        "max": 89.74511620761338,
+        "valid_count": 2613,
+        "invalid_count": 0,
+        "nan_count": 344
+      }
+    },
+    {
+      "step": 3,
+      "description": "Bid list 중복 제거",
+      "original_count": 4406,
+      "final_count": 4217,
+      "removed_count": 189
+    },
+    {
+      "step": 4,
+      "description": "예가변동폭 컬럼 추가",
+      "column_existed": false
+    },
+    {
+      "step": 5,
+      "description": "예가변동폭 데이터 매칭",
+      "matched_count": 2865,
+      "total_count": 2957,
+      "match_rate": 96.88873858640514
+    }
+  ],
+  "errors": [],
+  "summary": {},
+  "end_time": "2025-11-07T23:25:16.378169",
+  "output_files": {
+    "successful_bidders": "data/processed/List_of_Successful_Bidders_processed_20251107_232514.xlsx",
+    "bid_list": "data/processed/Bid_list_processed_20251107_232514.xlsx"
+  }
+}
