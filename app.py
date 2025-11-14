@@ -352,6 +352,7 @@ def main():
         # 선택된 입찰이 있으면 자동 입력, 없으면 기본값 사용
         selected_bid = st.session_state.get('selected_bid', None)
 
+        default_bid_number = selected_bid['bid_number'] if selected_bid else ""
         default_project_name = selected_bid['bid_name'] if selected_bid else ""
         default_chujeong = selected_bid['estimated_price'] if selected_bid else 0
         default_gichogeum = selected_bid['base_price'] if selected_bid else 0
@@ -366,6 +367,15 @@ def main():
             placeholder="예: 서울시 강남구 테헤란로 도로 보수공사",
             help="예측하려는 공사의 이름을 입력하세요 (필수)",
             max_chars=200
+        )
+
+        # 공고번호 입력 (선택사항)
+        bid_number = st.text_input(
+            "공고번호",
+            value=default_bid_number,
+            placeholder="예: R25BK00554395-000",
+            help="입찰 공고번호 (선택사항)",
+            max_chars=100
         )
 
         st.markdown("<br>", unsafe_allow_html=True)
@@ -450,6 +460,7 @@ def main():
             # 세션에 예측 결과 저장 (저장 버튼을 위해)
             st.session_state.yega_predictions = yega_predictions
             st.session_state.input_data = {
+                'bid_number': bid_number,
                 'project_name': project_name,
                 'chujeong_price': chujeong_price,
                 'gichogeum': gichogeum,
@@ -511,8 +522,13 @@ def main():
                             st.session_state.input_data['nakchalhahan_rate']
                         )
 
+                        # 공고번호 처리 (빈 문자열이면 None)
+                        bid_number_value = st.session_state.input_data['bid_number']
+                        bid_number_value = bid_number_value if bid_number_value.strip() else None
+
                         data = {
                             "prediction_group_id": group_id,
+                            "bid_number": bid_number_value,
                             "project_name": st.session_state.input_data['project_name'],
                             "chujeong_price": float(st.session_state.input_data['chujeong_price']),
                             "gichogeum": float(st.session_state.input_data['gichogeum']),
@@ -582,8 +598,10 @@ def main():
                         f"{status_icon} {created_at} | 📌 {project_display} | 기초금액: {gichogeum}원 | 실제: {actual_text}",
                         expanded=False
                     ):
-                        # 공사명 표시
-                        st.info(f"**🏗️ 공사명**: {project_display}")
+                        # 공사명 및 공고번호 표시
+                        bid_number_display = first_row.get('bid_number', None)
+                        bid_number_text = f" | **📋 공고번호**: {bid_number_display}" if pd.notna(bid_number_display) and bid_number_display else ""
+                        st.info(f"**🏗️ 공사명**: {project_display}{bid_number_text}")
 
                         # 입력 정보 표시
                         st.markdown("#### 📝 입력 정보")
