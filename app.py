@@ -139,6 +139,29 @@ def init_supabase():
     key = os.getenv("SUPABASE_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrYWx0eXhlaHd1cGp4aWpwd3R2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI5NDcxNzQsImV4cCI6MjA3ODUyMzE3NH0.Nl4yC6xqvbAN3KOJfcj7CsVJhp79CQlKc16qnhJRroo")
     return create_client(url, key)
 
+def search_bid_list(supabase, query):
+    """
+    입찰 공고 검색
+    - 공고번호 또는 공고명 부분 매칭 (대소문자 구분 없음)
+    - 최대 5개 결과 반환
+    """
+    if not query or len(query) < 2:
+        return []
+
+    try:
+        # 공고번호 또는 공고명에 검색어가 포함된 경우 모두 검색
+        result = supabase.table('bid_list')\
+            .select('*')\
+            .or_(f'bid_number.ilike.%{query}%,bid_name.ilike.%{query}%')\
+            .order('opening_date', desc=True)\
+            .limit(5)\
+            .execute()
+
+        return result.data
+    except Exception as e:
+        st.error(f"검색 오류: {str(e)}")
+        return []
+
 # 모델 로드
 @st.cache_resource
 def load_models():
@@ -245,13 +268,101 @@ def main():
     if menu == "🎯 예측하기":
         st.markdown("## 🎯 낙찰하한가 예측")
 
-        # 입력 섹션
+        # ========== 입찰 공고 검색 섹션 ==========
+        st.markdown('<div class="input-section">', unsafe_allow_html=True)
+        st.markdown("### 🔍 입찰 공고 검색")
+        st.markdown("공고번호 또는 공고명으로 검색하여 입찰 정보를 자동으로 입력할 수 있습니다.")
+
+        # 검색어 입력
+        search_query = st.text_input(
+            "검색어",
+            placeholder="공고번호 또는 공고명을 입력하세요 (최소 2자)",
+            help="공고번호로 정확 매칭 또는 공고명으로 부분 검색",
+            label_visibility="collapsed"
+        )
+
+        # 검색 실행 (2자 이상 입력시 자동 검색)
+        if search_query and len(search_query) >= 2:
+            search_results = search_bid_list(supabase, search_query)
+
+            if search_results:
+                st.markdown(f"**검색 결과: {len(search_results)}건**")
+
+                # 검색 결과를 카드 형태로 표시
+                for idx, result in enumerate(search_results):
+                    with st.container():
+                        # 날짜 포맷 (None 처리)
+                        opening_date_str = result['opening_date'] if result.get('opening_date') else '미정'
+                        if opening_date_str != '미정':
+                            try:
+                                opening_date_str = pd.to_datetime(opening_date_str).strftime('%Y-%m-%d')
+                            except:
+                                opening_date_str = str(result['opening_date'])
+
+                        # 선택적 필드 처리 (None일 경우 대체 텍스트)
+                        industry_str = result.get('industry') if result.get('industry') else '-'
+                        region_str = result.get('region') if result.get('region') else '-'
+                        yega_range_str = f"±{result['yega_range']}%" if result.get('yega_range') else '-'
+
+                        st.markdown(
+                            f"""
+                            <div style="
+                                border: 1px solid #e0e0e0;
+                                border-radius: 8px;
+                                padding: 15px;
+                                margin: 10px 0;
+                                background-color: #f9f9f9;
+                            ">
+                                <div style="font-weight: bold; font-size: 16px; margin-bottom: 8px;">
+                                    📋 {result['bid_name']}
+                                </div>
+                                <div style="color: #666; font-size: 14px; line-height: 1.6;">
+                                    <span style="font-weight: 600;">공고번호:</span> {result['bid_number']}<br>
+                                    <span style="font-weight: 600;">개찰일:</span> {opening_date_str} |
+                                    <span style="font-weight: 600;">예가변동폭:</span> {yega_range_str}<br>
+                                    <span style="font-weight: 600;">업종:</span> {industry_str} |
+                                    <span style="font-weight: 600;">지역:</span> {region_str}<br>
+                                    <span style="font-weight: 600;">추정가격:</span> {format_currency(result['estimated_price'])}원 |
+                                    <span style="font-weight: 600;">기초금액:</span> {format_currency(result['base_price'])}원<br>
+                                    <span style="font-weight: 600;">낙찰하한율:</span> {result['bid_lower_limit_rate']}%
+                                </div>
+                            </div>
+                            """,
+                            unsafe_allow_html=True
+                        )
+
+                        # 선택 버튼
+                        if st.button(f"✅ 이 공고 선택", key=f"select_bid_{idx}"):
+                            # session_state에 선택된 입찰 정보 저장
+                            st.session_state.selected_bid = result
+                            st.success(f"✅ '{result['bid_name']}' 공고가 선택되었습니다. 아래 입력란이 자동으로 채워집니다.")
+                            st.rerun()
+            else:
+                st.info("검색 결과가 없습니다. 다른 검색어를 입력해보세요.")
+
+        st.markdown('</div>', unsafe_allow_html=True)
+
+        # 구분선
+        st.markdown("---")
+
+        # ========== 수동 입력 섹션 ==========
         st.markdown('<div class="input-section">', unsafe_allow_html=True)
         st.markdown("### 📝 입력 정보")
+
+        # 선택된 입찰이 있으면 자동 입력, 없으면 기본값 사용
+        selected_bid = st.session_state.get('selected_bid', None)
+
+        default_project_name = selected_bid['bid_name'] if selected_bid else ""
+        default_chujeong = selected_bid['estimated_price'] if selected_bid else 0
+        default_gichogeum = selected_bid['base_price'] if selected_bid else 0
+        default_a_value = float(selected_bid['a_value']) if selected_bid and selected_bid['a_value'] else 0
+        default_nakchalhahan = float(selected_bid['bid_lower_limit_rate']) if selected_bid else 87.745
+        default_yega_range = float(selected_bid['yega_range']) if selected_bid else 2.5
 
         # 공사명 입력 (전체 너비, 최상단)
         project_name = st.text_input(
             "공사명 *",
+            value=default_project_name,
             placeholder="예: 서울시 강남구 테헤란로 도로 보수공사",
             help="예측하려는 공사의 이름을 입력하세요 (필수)",
             max_chars=200
@@ -265,25 +376,25 @@ def main():
             chujeong_price = st.number_input(
                 "추정가격 (원)",
                 min_value=0,
-                value=100000000,
+                value=default_chujeong,
                 step=1000000,
                 format="%d",
-                help="입찰 공고에 명시된 추정가격"
+                help="입찰 공고에 명시된 추정가격 (예: 100,000,000)"
             )
 
             gichogeum = st.number_input(
                 "기초금액 (원)",
                 min_value=0,
-                value=95000000,
+                value=default_gichogeum,
                 step=1000000,
                 format="%d",
-                help="예가 산정의 기준이 되는 금액"
+                help="예가 산정의 기준이 되는 금액 (예: 95,000,000)"
             )
 
             a_value = st.number_input(
                 "A값 (원)",
                 min_value=0,
-                value=0,
+                value=int(default_a_value),
                 step=100000,
                 format="%d",
                 help="낙찰하한율 계산에 사용되는 A값 (없으면 0)"
@@ -294,16 +405,20 @@ def main():
                 "낙찰하한율 (%)",
                 min_value=0.0,
                 max_value=100.0,
-                value=87.745,
+                value=default_nakchalhahan,
                 step=0.001,
                 format="%.3f",
                 help="낙찰 가능한 최저 비율"
             )
 
+            # 예가변동폭 selectbox의 인덱스 계산
+            yega_options = [2, 2.5, 3]
+            default_yega_idx = yega_options.index(default_yega_range) if default_yega_range in yega_options else 1
+
             yega_range = st.selectbox(
                 "예가변동폭",
-                options=[2, 2.5, 3],
-                index=1,
+                options=yega_options,
+                index=default_yega_idx,
                 help="예정가격의 변동 범위 (±%)"
             )
 
