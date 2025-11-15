@@ -259,6 +259,353 @@ def format_number_for_display(value):
         return ""
     return f"{value:,}"
 
+def create_bid_template():
+    """입찰공고 양식 엑셀 파일 생성"""
+    from io import BytesIO
+
+    # 샘플 데이터 (다양한 형식 예시 포함)
+    sample_data = {
+        '공고번호': ['20250101-001', '20250102-002', '20250103-003'],
+        '공고명': ['도로 포장 공사', '건물 신축 공사', '교량 보수 공사'],
+        '발주기관': ['서울시', '국토부', '경기도'],
+        '업종': ['토목', '건축', '토목'],
+        '지역': ['서울', '경기', '인천'],
+        '추정가격': [100000000, 500000000, 250000000],
+        '기초금액': [95000000, 475000000, 237500000],
+        'A값': [5000000, '', 0],  # 예시: 정상값, 빈값(→0), 0
+        '낙찰하한율': [87.745, 88.145, 89.500],
+        '예가변동폭': ['-2.0/+2.0', '-3/+3', '±3.0'],  # 예시: 다양한 형식
+        '개찰일': ['25.01.15 (10:00)', '25.01.20 (14:00)', '25.01.25 (11:00)'],
+        '투찰마감': ['25.01.14 (17:00)', '25.01.19 (17:00)', '25.01.24 (17:00)'],
+        '입력일': ['25.01.10', '25.01.12', '25.01.15'],
+        '순공사원가': [90000000, 450000000, 225000000],
+        'G2B물품분류': ['토목-도로', '건축-일반건축', '토목-교량']
+    }
+
+    df = pd.DataFrame(sample_data)
+
+    # 엑셀 생성
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        # 데이터 입력 시트
+        df.to_excel(writer, sheet_name='데이터 입력', index=False)
+
+        # 가이드 시트
+        guide_data = {
+            '컬럼명': list(sample_data.keys()),
+            '필수여부': ['✅ 필수', '✅ 필수', '선택', '선택', '선택',
+                        '✅ 필수', '✅ 필수', '선택', '✅ 필수', '선택',
+                        '선택', '선택', '선택', '선택', '선택'],
+            '형식': ['텍스트', '텍스트', '텍스트', '텍스트', '텍스트',
+                    '숫자', '숫자', '숫자', '숫자', '숫자/텍스트',
+                    '날짜(YY.MM.DD)', '텍스트', '날짜(YY.MM.DD)', '숫자', '텍스트'],
+            '설명': [
+                '공고 고유번호 (중복 시 업데이트)',
+                '공사명',
+                '발주 기관명',
+                '공사 업종',
+                '공사 지역',
+                '추정가격(원) - 쉼표 없이 입력',
+                '기초금액(원) - 쉼표 없이 입력',
+                'A값(원) - 빈 값, 0, "-" 모두 0으로 처리됨',
+                '낙찰하한율(%) - 소수점 포함',
+                '예가변동폭 - 다양한 형식 지원: -2.0/+2.0, -3/+3, ±3, ±3.0% 등',
+                '개찰일시 - 25.01.15 형식',
+                '투찰 마감시간',
+                '입력일 - 25.01.10 형식',
+                '순공사원가(원)',
+                'G2B 물품분류'
+            ],
+            '예시': [
+                '20250101-001',
+                '도로 포장 공사',
+                '서울시',
+                '토목',
+                '서울',
+                '100000000',
+                '95000000',
+                '5000000 또는 빈칸 또는 0',
+                '87.745',
+                '-2.0/+2.0 또는 ±3 또는 -3/+3',
+                '25.01.15 (10:00)',
+                '25.01.14 (17:00)',
+                '25.01.10',
+                '90000000',
+                '토목-도로'
+            ]
+        }
+        guide_df = pd.DataFrame(guide_data)
+        guide_df.to_excel(writer, sheet_name='작성 가이드', index=False)
+
+    output.seek(0)
+    return output
+
+def clean_a_value(a_value_input):
+    """A값 전처리 - 빈 값, 특수문자 등을 0으로 변환"""
+    # None, NaN 체크
+    if pd.isna(a_value_input):
+        return 0.0
+
+    # 문자열로 변환 후 정리
+    value_str = str(a_value_input).strip()
+
+    # 빈 문자열, 특수문자만 있는 경우
+    if not value_str or value_str in ['', '-', 'N/A', 'NA', 'n/a', 'null', 'NULL', '없음']:
+        return 0.0
+
+    # 숫자로 변환 시도
+    try:
+        # 쉼표 제거 후 변환
+        cleaned = value_str.replace(',', '').replace(' ', '')
+        return float(cleaned)
+    except:
+        return 0.0
+
+def parse_yega_range_app(yega_input):
+    """
+    예가변동폭 전처리
+
+    지원 형식:
+    - '-3/+3' → 3.0
+    - '-3.0/+3.0' → 3.0
+    - '±3' → 3.0
+    - '±3.0%' → 3.0
+    - '-2.0/2.0' → 2.0
+    - '3' → 3.0
+    - 빈 값 → 2.0 (기본값)
+    """
+    # None, NaN 체크
+    if pd.isna(yega_input):
+        return 2.0
+
+    # 문자열로 변환
+    yega_str = str(yega_input).strip()
+
+    # 빈 문자열 체크
+    if not yega_str:
+        return 2.0
+
+    try:
+        # %, 공백 제거
+        cleaned = yega_str.replace('%', '').replace(' ', '')
+
+        # 숫자 추출 (소수점 포함)
+        # [+\-±]? : 부호 (선택)
+        # (\d+\.?\d*) : 정수.소수 형태
+        matches = re.findall(r'[+\-±]?(\d+\.?\d*)', cleaned)
+
+        if matches:
+            # 모든 숫자를 float으로 변환 후 절대값의 최대값 사용
+            numbers = [abs(float(m)) for m in matches]
+            return max(numbers)
+
+        # 매칭 실패 시 기본값
+        return 2.0
+
+    except Exception as e:
+        # 파싱 실패 시 기본값
+        return 2.0
+
+def parse_date_app(date_str):
+    """날짜 파싱 (upload_bid_list.py와 동일)"""
+    if pd.isna(date_str):
+        return None
+    try:
+        date_part = str(date_str).split('(')[0].strip()
+        parts = date_part.split('.')
+        if len(parts) == 3:
+            year = int(parts[0])
+            if year < 100:
+                year = 2000 + year
+            month = int(parts[1])
+            day = int(parts[2])
+            return f"{year:04d}-{month:02d}-{day:02d}"
+        return None
+    except:
+        return None
+
+def safe_value_compare(val1, val2):
+    """None/NaN 안전 비교"""
+    # 둘 다 None/NaN인 경우 동일
+    if pd.isna(val1) and pd.isna(val2):
+        return True
+    # 하나만 None/NaN인 경우 다름
+    if pd.isna(val1) or pd.isna(val2):
+        return False
+    # 둘 다 값이 있는 경우 비교
+    return val1 == val2
+
+def safe_float_compare(val1, val2, tolerance=0.0001):
+    """부동소수점 안전 비교 (tolerance 허용)"""
+    # 둘 다 None/NaN인 경우 동일
+    if pd.isna(val1) and pd.isna(val2):
+        return True
+    # 하나만 None/NaN인 경우 다름
+    if pd.isna(val1) or pd.isna(val2):
+        return False
+    # 부동소수점 비교 (오차 허용)
+    try:
+        return abs(float(val1) - float(val2)) < tolerance
+    except:
+        return val1 == val2
+
+def compare_bid_records(existing, new):
+    """두 입찰 레코드 비교 (모든 비즈니스 필드)"""
+    # 비교할 필드 목록 (메타데이터 제외)
+    fields_to_compare = [
+        ('bid_name', safe_value_compare),
+        ('ordering_agency', safe_value_compare),
+        ('industry', safe_value_compare),
+        ('region', safe_value_compare),
+        ('estimated_price', safe_value_compare),
+        ('base_price', safe_value_compare),
+        ('a_value', safe_float_compare),
+        ('bid_lower_limit_rate', safe_float_compare),
+        ('yega_range', safe_float_compare),
+        ('opening_date', safe_value_compare),
+        ('submission_deadline', safe_value_compare),
+        ('input_date', safe_value_compare),
+        ('construction_cost', safe_float_compare),
+        ('g2b_category', safe_value_compare)
+    ]
+
+    # 모든 필드가 동일한지 확인
+    for field, compare_func in fields_to_compare:
+        existing_val = existing.get(field)
+        new_val = new.get(field)
+
+        if not compare_func(existing_val, new_val):
+            return False  # 하나라도 다르면 다른 레코드
+
+    return True  # 모든 필드가 동일
+
+def upload_bid_data_from_app(supabase, df):
+    """업로드된 파일 데이터를 DB에 저장 (중복 판별 포함)"""
+
+    # ID 컬럼 제거 (있다면)
+    if 'id' in df.columns:
+        df = df.drop(columns=['id'])
+
+    # 필수 컬럼 확인
+    required_cols = ['공고번호', '공고명', '추정가격', '기초금액', '낙찰하한율']
+    missing_cols = [col for col in required_cols if col not in df.columns]
+    if missing_cols:
+        return False, f"필수 컬럼 누락: {', '.join(missing_cols)}", 0, 0, 0, 0
+
+    # NaN 안전 처리 함수
+    def safe_float(value, default=None):
+        if pd.isna(value):
+            return default
+        try:
+            return float(value)
+        except:
+            return default
+
+    # 1단계: 업로드할 공고번호 추출 및 유효성 검사
+    valid_data = []
+    error_rows = []
+
+    for idx, row in df.iterrows():
+        try:
+            # 필수 필드 검증
+            bid_lower_limit_rate_value = safe_float(row['낙찰하한율'])
+            if bid_lower_limit_rate_value is None:
+                error_rows.append({'행번호': idx+2, '공고번호': str(row.get('공고번호', 'N/A')), '오류': '낙찰하한율 누락'})
+                continue
+
+            # 데이터 전처리
+            data = {
+                'bid_number': str(row['공고번호']),
+                'bid_name': str(row['공고명']),
+                'ordering_agency': str(row['발주기관']) if pd.notna(row.get('발주기관')) else None,
+                'industry': str(row['업종']) if pd.notna(row.get('업종')) else None,
+                'region': str(row['지역']) if pd.notna(row.get('지역')) else None,
+                'estimated_price': int(row['추정가격']),
+                'base_price': int(row['기초금액']),
+                'a_value': clean_a_value(row.get('A값')),  # 개선된 A값 전처리
+                'bid_lower_limit_rate': bid_lower_limit_rate_value,
+                'yega_range': parse_yega_range_app(row.get('예가변동폭')),  # 개선된 예가변동폭 전처리
+                'opening_date': parse_date_app(row.get('개찰일')),
+                'submission_deadline': str(row['투찰마감']) if pd.notna(row.get('투찰마감')) else None,
+                'input_date': parse_date_app(row.get('입력일')),
+                'construction_cost': safe_float(row.get('순공사원가'), None),
+                'g2b_category': str(row['G2B물품분류']) if pd.notna(row.get('G2B물품분류')) else None
+            }
+
+            valid_data.append((idx+2, data))  # (엑셀 행번호, 데이터)
+
+        except Exception as e:
+            error_rows.append({'행번호': idx+2, '공고번호': str(row.get('공고번호', 'N/A')), '오류': str(e)[:50]})
+
+    if not valid_data:
+        return False, "유효한 데이터가 없습니다", 0, 0, 0, error_rows
+
+    # 2단계: 기존 데이터 일괄 조회
+    bid_numbers = [data['bid_number'] for _, data in valid_data]
+
+    try:
+        existing_response = supabase.table('bid_list')\
+            .select('*')\
+            .in_('bid_number', bid_numbers)\
+            .execute()
+
+        # 딕셔너리로 변환 (O(1) 검색)
+        existing_dict = {item['bid_number']: item for item in existing_response.data}
+
+    except Exception as e:
+        return False, f"DB 조회 실패: {str(e)}", 0, 0, 0, error_rows
+
+    # 3단계: 신규/업데이트/동일 분류
+    new_records = []
+    update_records = []
+    skip_records = []
+
+    for row_num, data in valid_data:
+        bid_num = data['bid_number']
+
+        if bid_num not in existing_dict:
+            # 신규 레코드
+            new_records.append((row_num, data))
+        else:
+            # 기존 레코드 존재 - 비교
+            existing = existing_dict[bid_num]
+
+            if compare_bid_records(existing, data):
+                # 완전히 동일 - 스킵
+                skip_records.append((row_num, data))
+            else:
+                # 다름 - 업데이트 필요
+                update_records.append((row_num, data))
+
+    # 4단계: DB 반영
+    insert_success = 0
+    update_success = 0
+
+    # 신규 삽입
+    for row_num, data in new_records:
+        try:
+            supabase.table('bid_list').insert(data).execute()
+            insert_success += 1
+        except Exception as e:
+            error_rows.append({'행번호': row_num, '공고번호': data['bid_number'], '오류': f"삽입 실패: {str(e)[:30]}"})
+
+    # 업데이트
+    for row_num, data in update_records:
+        try:
+            supabase.table('bid_list')\
+                .update(data)\
+                .eq('bid_number', data['bid_number'])\
+                .execute()
+            update_success += 1
+        except Exception as e:
+            error_rows.append({'행번호': row_num, '공고번호': data['bid_number'], '오류': f"업데이트 실패: {str(e)[:30]}"})
+
+    # 5단계: 결과 리포트
+    skip_count = len(skip_records)
+    error_count = len(error_rows)
+
+    return True, "업로드 완료", insert_success, update_success, skip_count, error_rows
+
 def main():
     # 헤더
     st.markdown('<div class="main-header">📊 낙찰하한가 예측 시스템</div>', unsafe_allow_html=True)
@@ -289,13 +636,126 @@ def main():
         st.markdown("### 🔍 입찰 공고 검색")
         st.markdown("공고번호 또는 공고명으로 검색하여 입찰 정보를 자동으로 입력할 수 있습니다.")
 
-        # 검색어 입력
-        search_query = st.text_input(
-            "검색어",
-            placeholder="공고번호 또는 공고명을 입력하세요 (최소 2자)",
-            help="공고번호로 정확 매칭 또는 공고명으로 부분 검색",
-            label_visibility="collapsed"
-        )
+        # 검색어 입력 및 버튼들
+        col1, col2, col3 = st.columns([3, 1, 1])
+
+        with col1:
+            # 검색어 입력
+            search_query = st.text_input(
+                "검색어",
+                placeholder="공고번호 또는 공고명을 입력하세요 (최소 2자)",
+                help="공고번호로 정확 매칭 또는 공고명으로 부분 검색",
+                label_visibility="collapsed"
+            )
+
+        with col2:
+            # 양식 다운로드 버튼
+            template_file = create_bid_template()
+            st.download_button(
+                label="📥 양식 다운로드",
+                data=template_file,
+                file_name=f"입찰공고_업로드_양식_{pd.Timestamp.now().strftime('%Y%m%d')}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True,
+                help="입찰공고 업로드용 엑셀 양식 다운로드"
+            )
+
+        with col3:
+            # 업로드 버튼 (모달 트리거)
+            if st.button("📤 공고 업로드", use_container_width=True, help="엑셀/CSV 파일로 입찰공고 일괄 업로드"):
+                st.session_state.show_upload_modal = True
+
+        # 업로드 모달
+        if st.session_state.get('show_upload_modal', False):
+            with st.container():
+                st.markdown("---")
+                st.markdown("#### 📤 입찰공고 일괄 업로드")
+
+                uploaded_file = st.file_uploader(
+                    "엑셀 또는 CSV 파일을 선택하세요",
+                    type=['xlsx', 'xls', 'csv'],
+                    help="양식에 맞게 작성된 입찰공고 파일을 업로드하세요"
+                )
+
+                col_btn1, col_btn2 = st.columns(2)
+
+                with col_btn1:
+                    if st.button("❌ 취소", use_container_width=True):
+                        st.session_state.show_upload_modal = False
+                        st.rerun()
+
+                with col_btn2:
+                    if st.button("✅ 업로드 실행", type="primary", use_container_width=True, disabled=uploaded_file is None):
+                        if uploaded_file is not None:
+                            try:
+                                # 파일 읽기
+                                if uploaded_file.name.endswith('.csv'):
+                                    df = pd.read_csv(uploaded_file, encoding='utf-8-sig')
+                                else:
+                                    df = pd.read_excel(uploaded_file)
+
+                                # 업로드 실행
+                                with st.spinner('📊 데이터 분석 및 업로드 중...'):
+                                    success, message, insert_count, update_count, skip_count, error_rows = upload_bid_data_from_app(supabase, df)
+
+                                if success:
+                                    total_processed = insert_count + update_count + skip_count
+                                    error_count = len(error_rows)
+
+                                    # 성공 메시지
+                                    st.success(f"""
+                                    ✅ {message}
+
+                                    **📊 처리 결과**
+                                    - 🆕 신규 등록: {insert_count}건
+                                    - 🔄 업데이트: {update_count}건
+                                    - ⏭️ 동일 (스킵): {skip_count}건
+                                    - ✔️ 총 처리: {total_processed}건
+                                    - ❌ 오류: {error_count}건
+                                    """)
+
+                                    # 통계 시각화
+                                    if total_processed > 0:
+                                        col_stat1, col_stat2, col_stat3 = st.columns(3)
+                                        with col_stat1:
+                                            st.metric("신규", f"{insert_count}건",
+                                                     delta=f"{insert_count/total_processed*100:.1f}%")
+                                        with col_stat2:
+                                            st.metric("업데이트", f"{update_count}건",
+                                                     delta=f"{update_count/total_processed*100:.1f}%")
+                                        with col_stat3:
+                                            st.metric("동일(스킵)", f"{skip_count}건",
+                                                     delta=f"{skip_count/total_processed*100:.1f}%")
+
+                                    # 오류 상세
+                                    if error_count > 0 and error_rows:
+                                        with st.expander("❌ 오류 상세 보기"):
+                                            error_df = pd.DataFrame(error_rows)
+                                            st.dataframe(error_df, use_container_width=True)
+
+                                            # CSV 다운로드
+                                            csv = error_df.to_csv(index=False, encoding='utf-8-sig')
+                                            st.download_button(
+                                                label="📥 오류 목록 다운로드",
+                                                data=csv,
+                                                file_name=f"upload_errors_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                                                mime="text/csv"
+                                            )
+
+                                    st.session_state.show_upload_modal = False
+                                    if insert_count > 0 or update_count > 0:
+                                        st.balloons()
+                                    st.rerun()
+                                else:
+                                    st.error(f"❌ {message}")
+
+                            except Exception as e:
+                                st.error(f"❌ 파일 처리 실패: {str(e)}")
+                                import traceback
+                                with st.expander("상세 오류"):
+                                    st.code(traceback.format_exc())
+
+                st.markdown("---")
 
         # 검색 실행 (2자 이상 입력시 자동 검색)
         if search_query and len(search_query) >= 2:
