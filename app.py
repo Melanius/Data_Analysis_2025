@@ -17,6 +17,20 @@ import os
 import uuid
 import re
 
+# .env 파일 로드 (python-dotenv 없이)
+def load_env():
+    """간단한 .env 파일 로더"""
+    env_path = Path(__file__).parent / '.env'
+    if env_path.exists():
+        with open(env_path) as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith('#') and '=' in line:
+                    key, value = line.split('=', 1)
+                    os.environ[key.strip()] = value.strip()
+
+load_env()
+
 # 페이지 설정
 st.set_page_config(
     page_title="낙찰하한가 예측 시스템",
