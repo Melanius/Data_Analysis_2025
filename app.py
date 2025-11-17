@@ -429,13 +429,14 @@ def parse_date_app(date_str):
 def get_bid_list_stats(supabase_url, supabase_key):
     """입찰공고 DB 통계 정보 조회"""
     from supabase import create_client
+    import pytz
     supabase = create_client(supabase_url, supabase_key)
 
     stats = {
-        'latest_opening_date': None,
+        'latest_input_date': None,
         'total_count': 0,
-        'last_updated': None,
-        'oldest_opening_date': None
+        'oldest_input_date': None,
+        'latest_created_at': None
     }
 
     try:
@@ -445,49 +446,97 @@ def get_bid_list_stats(supabase_url, supabase_key):
         two_years_ago = (today - timedelta(days=730)).isoformat()
         two_years_later = (today + timedelta(days=730)).isoformat()
 
-        # 최신 개찰일 (날짜 범위 필터 적용)
+        # 최신 입력일 (날짜 범위 필터 적용)
         latest_result = supabase.table('bid_list')\
-            .select('opening_date')\
-            .gte('opening_date', two_years_ago)\
-            .lte('opening_date', two_years_later)\
-            .order('opening_date', desc=True)\
-            .not_.is_('opening_date', 'null')\
+            .select('input_date')\
+            .gte('input_date', two_years_ago)\
+            .lte('input_date', two_years_later)\
+            .order('input_date', desc=True)\
+            .not_.is_('input_date', 'null')\
             .limit(1).execute()
 
-        if latest_result.data and latest_result.data[0]['opening_date']:
-            stats['latest_opening_date'] = latest_result.data[0]['opening_date']
+        if latest_result.data and latest_result.data[0]['input_date']:
+            stats['latest_input_date'] = latest_result.data[0]['input_date']
 
-        # 가장 오래된 개찰일 (날짜 범위 필터 적용)
+        # 가장 오래된 입력일 (날짜 범위 필터 적용)
         oldest_result = supabase.table('bid_list')\
-            .select('opening_date')\
-            .gte('opening_date', two_years_ago)\
-            .lte('opening_date', two_years_later)\
-            .order('opening_date', desc=False)\
-            .not_.is_('opening_date', 'null')\
+            .select('input_date')\
+            .gte('input_date', two_years_ago)\
+            .lte('input_date', two_years_later)\
+            .order('input_date', desc=False)\
+            .not_.is_('input_date', 'null')\
             .limit(1).execute()
 
-        if oldest_result.data and oldest_result.data[0]['opening_date']:
-            stats['oldest_opening_date'] = oldest_result.data[0]['opening_date']
+        if oldest_result.data and oldest_result.data[0]['input_date']:
+            stats['oldest_input_date'] = oldest_result.data[0]['input_date']
 
         # 총 건수
         count_result = supabase.table('bid_list')\
             .select('id', count='exact').execute()
         stats['total_count'] = count_result.count or 0
 
-        # 마지막 업데이트
-        updated_result = supabase.table('bid_list')\
-            .select('updated_at')\
-            .order('updated_at', desc=True)\
+        # 최신 created_at (실제 DB 입력 시간)
+        created_result = supabase.table('bid_list')\
+            .select('created_at')\
+            .order('created_at', desc=True)\
+            .not_.is_('created_at', 'null')\
             .limit(1).execute()
 
-        if updated_result.data and updated_result.data[0]['updated_at']:
-            stats['last_updated'] = updated_result.data[0]['updated_at']
+        if created_result.data and created_result.data[0]['created_at']:
+            # UTC → KST 변환
+            utc_str = created_result.data[0]['created_at']
+            utc_dt = datetime.fromisoformat(utc_str.replace('Z', '+00:00'))
+            kst = pytz.timezone('Asia/Seoul')
+            kst_dt = utc_dt.astimezone(kst)
+            stats['latest_created_at'] = kst_dt
 
     except Exception as e:
         # 에러 발생 시 기본값 반환
         pass
 
     return stats
+
+def get_latest_bids(supabase_url, supabase_key, page=1, per_page=10):
+    """최신 입찰 공고 목록 조회 (페이지네이션)"""
+    from supabase import create_client
+    from datetime import datetime, timedelta
+
+    supabase = create_client(supabase_url, supabase_key)
+
+    try:
+        # 날짜 범위 설정 (오늘 ±2년)
+        today = datetime.now().date()
+        two_years_ago = (today - timedelta(days=730)).isoformat()
+        two_years_later = (today + timedelta(days=730)).isoformat()
+
+        # 총 개수 조회 (날짜 범위 필터 적용)
+        count_result = supabase.table('bid_list')\
+            .select('id', count='exact')\
+            .gte('input_date', two_years_ago)\
+            .lte('input_date', two_years_later)\
+            .not_.is_('input_date', 'null')\
+            .execute()
+
+        total_count = count_result.count or 0
+
+        # 페이지네이션 계산
+        offset = (page - 1) * per_page
+
+        # 데이터 조회 (input_date 기준 최신순)
+        result = supabase.table('bid_list')\
+            .select('*')\
+            .gte('input_date', two_years_ago)\
+            .lte('input_date', two_years_later)\
+            .not_.is_('input_date', 'null')\
+            .order('input_date', desc=True)\
+            .range(offset, offset + per_page - 1)\
+            .execute()
+
+        return result.data, total_count
+
+    except Exception as e:
+        print(f"❌ 최신 공고 조회 실패: {e}")
+        return [], 0
 
 def safe_value_compare(val1, val2):
     """None/NaN 안전 비교"""
@@ -708,41 +757,48 @@ def main():
                 latest_date_str = "정보 없음"
                 date_range_str = ""
 
-                if stats['latest_opening_date']:
+                if stats['latest_input_date']:
                     try:
-                        latest_date = pd.to_datetime(stats['latest_opening_date'])
+                        latest_date = pd.to_datetime(stats['latest_input_date'])
                         latest_date_str = latest_date.strftime('%Y년 %m월 %d일')
                     except:
-                        latest_date_str = stats['latest_opening_date']
+                        latest_date_str = stats['latest_input_date']
 
-                if stats['oldest_opening_date'] and stats['latest_opening_date']:
+                if stats['oldest_input_date'] and stats['latest_input_date']:
                     try:
-                        oldest_date = pd.to_datetime(stats['oldest_opening_date'])
+                        oldest_date = pd.to_datetime(stats['oldest_input_date'])
                         date_range_str = f" (DB 범위: {oldest_date.strftime('%Y.%m.%d')} ~ {latest_date.strftime('%Y.%m.%d')})"
                     except:
                         pass
 
-                # 업데이트 시간 포맷팅
-                update_time_str = "정보 없음"
-                if stats['last_updated']:
+                # 최근 데이터 입력 시간 포맷팅 (KST 기준 상대 시간)
+                recent_input_str = "정보 없음"
+                if stats['latest_created_at']:
                     try:
-                        update_time = pd.to_datetime(stats['last_updated'])
-                        now = pd.Timestamp.now(tz=update_time.tz)
-                        time_diff = now - update_time
+                        import pytz
+
+                        # created_at은 이미 KST datetime 객체
+                        created_kst = stats['latest_created_at']
+
+                        # 현재 KST 시간
+                        now_kst = datetime.now(pytz.timezone('Asia/Seoul'))
+
+                        # 시간 차이 계산
+                        time_diff = now_kst - created_kst
 
                         if time_diff.total_seconds() < 60:
-                            update_time_str = "방금 전"
+                            recent_input_str = "방금 전"
                         elif time_diff.total_seconds() < 3600:
                             minutes = int(time_diff.total_seconds() / 60)
-                            update_time_str = f"{minutes}분 전"
+                            recent_input_str = f"{minutes}분 전"
                         elif time_diff.total_seconds() < 86400:
                             hours = int(time_diff.total_seconds() / 3600)
-                            update_time_str = f"{hours}시간 전"
+                            recent_input_str = f"{hours}시간 전"
                         else:
                             days = int(time_diff.total_seconds() / 86400)
-                            update_time_str = f"{days}일 전"
-                    except:
-                        update_time_str = "알 수 없음"
+                            recent_input_str = f"{days}일 전"
+                    except Exception as e:
+                        recent_input_str = "알 수 없음"
 
                 # 정보 박스 표시
                 st.markdown(f"""
@@ -766,7 +822,7 @@ def main():
                     ">
                         <div>
                             <div style="color: #667eea; font-size: 12px; font-weight: 600; margin-bottom: 4px;">
-                                📅 최신 개찰일
+                                📅 최신 입력일
                             </div>
                             <div style="color: #1a202c; font-size: 18px; font-weight: 700;">
                                 {latest_date_str}
@@ -782,10 +838,10 @@ def main():
                         </div>
                         <div>
                             <div style="color: #667eea; font-size: 12px; font-weight: 600; margin-bottom: 4px;">
-                                🔄 마지막 업데이트
+                                🔄 최근 데이터 입력
                             </div>
                             <div style="color: #1a202c; font-size: 18px; font-weight: 700;">
-                                {update_time_str}
+                                {recent_input_str}
                             </div>
                         </div>
                     </div>
@@ -802,12 +858,12 @@ def main():
             # 사용자에게는 표시하지 않음
 
         st.markdown("### 🔍 입찰 공고 검색")
-        st.markdown("공고번호 또는 공고명으로 검색하여 입찰 정보를 자동으로 입력할 수 있습니다.")
+        st.markdown("공고번호 또는 공고명으로 검색하거나, 최신 공고 목록에서 선택하세요.")
 
-        # 검색어 입력 및 버튼들
-        col1, col2, col3 = st.columns([3, 1, 1])
+        # 검색어 입력 + 최신 공고 버튼
+        col_search1, col_search2 = st.columns([6, 1])
 
-        with col1:
+        with col_search1:
             # 검색어 입력
             search_query = st.text_input(
                 "검색어",
@@ -815,6 +871,104 @@ def main():
                 help="공고번호로 정확 매칭 또는 공고명으로 부분 검색",
                 label_visibility="collapsed"
             )
+
+        with col_search2:
+            # 최신 공고 버튼
+            latest_btn_label = "📋 최신 공고 ▼" if st.session_state.get('show_latest_bids', False) else "📋 최신 공고"
+            if st.button(latest_btn_label, use_container_width=True, help="최신 입력일 기준 공고 목록 보기"):
+                st.session_state.show_latest_bids = not st.session_state.get('show_latest_bids', False)
+                if 'latest_bids_page' not in st.session_state:
+                    st.session_state.latest_bids_page = 1
+                st.rerun()
+
+        # ========== 최신 공고 목록 (조건부 표시) ==========
+        if st.session_state.get('show_latest_bids', False):
+            st.markdown("---")
+            st.markdown("#### 📋 최신 입찰 공고")
+
+            # 페이지 가져오기
+            page = st.session_state.get('latest_bids_page', 1)
+
+            # 데이터 조회
+            bids, total_count = get_latest_bids(SUPABASE_URL, SUPABASE_KEY, page, 10)
+
+            if total_count > 0:
+                total_pages = (total_count + 9) // 10  # 올림
+
+                st.markdown(f"총 **{total_count:,}**건 중 **{(page-1)*10+1}~{min(page*10, total_count)}**번째 (페이지 {page}/{total_pages})")
+
+                # 카드 표시
+                for bid in bids:
+                    with st.container():
+                        # 날짜 포맷팅
+                        input_date_str = "-"
+                        if bid.get('input_date'):
+                            try:
+                                input_date_str = pd.to_datetime(bid['input_date']).strftime('%Y-%m-%d')
+                            except:
+                                input_date_str = str(bid['input_date'])
+
+                        # 카드 디자인
+                        st.markdown(f"""
+                        <div style="
+                            background: white;
+                            padding: 15px;
+                            border-radius: 8px;
+                            border-left: 4px solid #667eea;
+                            margin-bottom: 10px;
+                            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                        ">
+                            <div style="font-weight: 600; color: #667eea; font-size: 13px;">📌 {bid['bid_number']}</div>
+                            <div style="font-size: 16px; font-weight: 700; margin: 5px 0; color: #1a202c;">{bid['bid_name'][:80]}{'...' if len(bid['bid_name']) > 80 else ''}</div>
+                            <div style="font-size: 13px; color: #666;">
+                                {bid.get('ordering_agency', '-')[:20] if bid.get('ordering_agency') else '-'} •
+                                {input_date_str} •
+                                {bid.get('estimated_price', 0):,}원
+                            </div>
+                        </div>
+                        """, unsafe_allow_html=True)
+
+                        # 선택 버튼
+                        col_btn1, col_btn2 = st.columns([5, 1])
+                        with col_btn2:
+                            if st.button("선택하기 →", key=f"select_bid_{bid['id']}", use_container_width=True, type="primary"):
+                                # 자동 기입
+                                st.session_state.selected_bid = bid
+                                st.session_state.show_latest_bids = False
+                                st.rerun()
+
+                # 페이지네이션
+                st.markdown("<div style='margin-top: 15px;'></div>", unsafe_allow_html=True)
+                col_prev, col_info, col_next = st.columns([1, 2, 1])
+
+                with col_prev:
+                    if page > 1:
+                        if st.button("← 이전", key="prev_page", use_container_width=True):
+                            st.session_state.latest_bids_page = page - 1
+                            st.rerun()
+                    else:
+                        st.button("← 이전", key="prev_page_disabled", use_container_width=True, disabled=True)
+
+                with col_info:
+                    st.markdown(f"<div style='text-align: center; padding-top: 8px; font-size: 14px;'>페이지 {page} / {total_pages}</div>", unsafe_allow_html=True)
+
+                with col_next:
+                    if page < total_pages:
+                        if st.button("다음 →", key="next_page", use_container_width=True):
+                            st.session_state.latest_bids_page = page + 1
+                            st.rerun()
+                    else:
+                        st.button("다음 →", key="next_page_disabled", use_container_width=True, disabled=True)
+            else:
+                st.info("데이터가 없습니다.")
+
+            st.markdown("---")
+
+        # ========== 양식 다운로드 및 공고 업로드 ==========
+        col1, col2, col3 = st.columns([3, 1, 1])
+
+        with col1:
+            st.markdown("")  # 공간 유지
 
         with col2:
             # 양식 다운로드 버튼
@@ -841,8 +995,8 @@ def main():
 
                 uploaded_file = st.file_uploader(
                     "엑셀 또는 CSV 파일을 선택하세요",
-                    type=['xlsx', 'xls', 'csv'],
-                    help="양식에 맞게 작성된 입찰공고 파일을 업로드하세요"
+                    type=['xlsx', 'csv'],
+                    help="양식에 맞게 작성된 입찰공고 파일을 업로드하세요 (.xlsx 또는 .csv 파일만 지원)"
                 )
 
                 col_btn1, col_btn2 = st.columns(2)
