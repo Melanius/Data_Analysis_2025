@@ -15,6 +15,7 @@ import plotly.graph_objects as go
 from supabase import create_client, Client
 import os
 import uuid
+import re
 
 # 페이지 설정
 st.set_page_config(
@@ -132,12 +133,16 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # Supabase 설정
-SUPABASE_URL = os.getenv("SUPABASE_URL", "https://kkaltyxehwupjxijpwtv.supabase.co")
-SUPABASE_KEY = os.getenv("SUPABASE_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrYWx0eXhlaHd1cGp4aWpwd3R2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI5NDcxNzQsImV4cCI6MjA3ODUyMzE3NH0.Nl4yC6xqvbAN3KOJfcj7CsVJhp79CQlKc16qnhJRroo")
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
 @st.cache_resource
 def init_supabase():
     """Supabase 클라이언트 초기화"""
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        st.error("⚠️ 데이터베이스 연결 정보가 설정되지 않았습니다. 관리자에게 문의하세요.")
+        st.info("💡 환경변수 SUPABASE_URL과 SUPABASE_KEY를 설정해주세요.")
+        st.stop()
     return create_client(SUPABASE_URL, SUPABASE_KEY)
 
 def search_bid_list(supabase, query):
@@ -251,7 +256,7 @@ def parse_number_input(input_str):
     try:
         # 쉼표 제거 후 숫자 변환
         return int(input_str.replace(",", "").strip())
-    except:
+    except (ValueError, AttributeError):
         return 0
 
 def format_number_for_display(value):
@@ -359,7 +364,7 @@ def clean_a_value(a_value_input):
         # 쉼표 제거 후 변환
         cleaned = value_str.replace(',', '').replace(' ', '')
         return float(cleaned)
-    except:
+    except (ValueError, AttributeError):
         return 0.0
 
 def parse_yega_range_app(yega_input):
@@ -422,7 +427,7 @@ def parse_date_app(date_str):
             day = int(parts[2])
             return f"{year:04d}-{month:02d}-{day:02d}"
         return None
-    except:
+    except (ValueError, AttributeError, IndexError):
         return None
 
 @st.cache_data(ttl=60)  # 1분 캐시
@@ -560,7 +565,7 @@ def safe_float_compare(val1, val2, tolerance=0.0001):
     # 부동소수점 비교 (오차 허용)
     try:
         return abs(float(val1) - float(val2)) < tolerance
-    except:
+    except (ValueError, TypeError):
         return val1 == val2
 
 def compare_bid_records(existing, new):
@@ -612,7 +617,7 @@ def upload_bid_data_from_app(supabase, df):
             return default
         try:
             return float(value)
-        except:
+        except (ValueError, TypeError):
             return default
 
     # 1단계: 업로드할 공고번호 추출 및 유효성 검사
@@ -761,14 +766,14 @@ def main():
                     try:
                         latest_date = pd.to_datetime(stats['latest_input_date'])
                         latest_date_str = latest_date.strftime('%Y년 %m월 %d일')
-                    except:
+                    except (ValueError, AttributeError):
                         latest_date_str = stats['latest_input_date']
 
                 if stats['oldest_input_date'] and stats['latest_input_date']:
                     try:
                         oldest_date = pd.to_datetime(stats['oldest_input_date'])
                         date_range_str = f" (DB 범위: {oldest_date.strftime('%Y.%m.%d')} ~ {latest_date.strftime('%Y.%m.%d')})"
-                    except:
+                    except (ValueError, AttributeError):
                         pass
 
                 # 최근 데이터 입력 시간 포맷팅 (KST 기준 상대 시간)
@@ -905,7 +910,7 @@ def main():
                         if bid.get('input_date'):
                             try:
                                 input_date_str = pd.to_datetime(bid['input_date']).strftime('%Y-%m-%d')
-                            except:
+                            except (ValueError, AttributeError):
                                 input_date_str = str(bid['input_date'])
 
                         # 카드 디자인
@@ -1097,7 +1102,7 @@ def main():
                         if opening_date_str != '미정':
                             try:
                                 opening_date_str = pd.to_datetime(opening_date_str).strftime('%Y-%m-%d')
-                            except:
+                            except (ValueError, AttributeError):
                                 opening_date_str = str(result['opening_date'])
 
                         # 선택적 필드 처리 (None일 경우 대체 텍스트)
@@ -1504,7 +1509,7 @@ def main():
                             if pd.notna(existing_date) and existing_date:
                                 try:
                                     date_value = pd.to_datetime(existing_date).date()
-                                except:
+                                except (ValueError, AttributeError):
                                     date_value = None
 
                             actual_date = st.date_input(
