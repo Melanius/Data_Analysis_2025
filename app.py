@@ -146,9 +146,15 @@ st.markdown("""
 </script>
 """, unsafe_allow_html=True)
 
-# Supabase 설정
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+# Supabase 설정 - Streamlit Cloud Secrets 우선, 로컬 .env 폴백
+try:
+    # Streamlit Cloud 환경: st.secrets 사용
+    SUPABASE_URL = st.secrets["SUPABASE_URL"]
+    SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
+except (KeyError, FileNotFoundError, AttributeError):
+    # 로컬 환경: .env 파일 사용
+    SUPABASE_URL = os.getenv("SUPABASE_URL")
+    SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
 @st.cache_resource
 def init_supabase():
