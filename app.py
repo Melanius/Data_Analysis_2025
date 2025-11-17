@@ -1503,7 +1503,7 @@ def main():
                         st.markdown("---")
                         st.markdown("#### ✏️ 실제 낙찰하한가 입력")
 
-                        col1, col2, col3 = st.columns([2, 2, 1])
+                        col1, col2, col3, col4 = st.columns([2, 2, 1, 1])
                         with col1:
                             # 기존 값 포맷팅
                             default_actual_value = int(actual_value) if pd.notna(actual_value) else 0
@@ -1564,6 +1564,32 @@ def main():
                                     st.rerun()
                                 except Exception as e:
                                     st.error(f"❌ 저장 실패: {str(e)}")
+
+                        with col4:
+                            st.markdown("<br>", unsafe_allow_html=True)
+                            confirm_key = f"confirm_delete_{group_id}"
+
+                            if st.button("🗑️ 삭제", type="secondary", use_container_width=True, key=f"delete_{group_id}"):
+                                if st.session_state.get(confirm_key, False):
+                                    # 2차 클릭 - 실제 삭제 실행
+                                    try:
+                                        delete_count = len(group_df)
+                                        for _, row in group_df.iterrows():
+                                            supabase.table("predictions").delete().eq("id", row['id']).execute()
+
+                                        # 확인 상태 초기화
+                                        if confirm_key in st.session_state:
+                                            del st.session_state[confirm_key]
+
+                                        st.success(f"✅ {delete_count}건의 예측 이력이 삭제되었습니다!")
+                                        st.rerun()
+                                    except Exception as e:
+                                        st.error(f"❌ 삭제 실패: {str(e)}")
+                                else:
+                                    # 1차 클릭 - 확인 요청
+                                    st.session_state[confirm_key] = True
+                                    st.warning(f"⚠️ 한 번 더 클릭하면 {len(group_df)}건이 삭제됩니다 (되돌릴 수 없음)")
+                                    st.rerun()
 
             else:
                 st.info("📭 아직 저장된 예측이 없습니다.")
