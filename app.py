@@ -132,12 +132,13 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # Supabase 설정
+SUPABASE_URL = os.getenv("SUPABASE_URL", "https://kkaltyxehwupjxijpwtv.supabase.co")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrYWx0eXhlaHd1cGp4aWpwd3R2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI5NDcxNzQsImV4cCI6MjA3ODUyMzE3NH0.Nl4yC6xqvbAN3KOJfcj7CsVJhp79CQlKc16qnhJRroo")
+
 @st.cache_resource
 def init_supabase():
     """Supabase 클라이언트 초기화"""
-    url = os.getenv("SUPABASE_URL", "https://kkaltyxehwupjxijpwtv.supabase.co")
-    key = os.getenv("SUPABASE_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrYWx0eXhlaHd1cGp4aWpwd3R2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI5NDcxNzQsImV4cCI6MjA3ODUyMzE3NH0.Nl4yC6xqvbAN3KOJfcj7CsVJhp79CQlKc16qnhJRroo")
-    return create_client(url, key)
+    return create_client(SUPABASE_URL, SUPABASE_KEY)
 
 def search_bid_list(supabase, query):
     """
@@ -424,6 +425,70 @@ def parse_date_app(date_str):
     except:
         return None
 
+@st.cache_data(ttl=60)  # 1분 캐시
+def get_bid_list_stats(supabase_url, supabase_key):
+    """입찰공고 DB 통계 정보 조회"""
+    from supabase import create_client
+    supabase = create_client(supabase_url, supabase_key)
+
+    stats = {
+        'latest_opening_date': None,
+        'total_count': 0,
+        'last_updated': None,
+        'oldest_opening_date': None
+    }
+
+    try:
+        # 합리적인 날짜 범위 설정 (오늘 ±2년)
+        from datetime import datetime, timedelta
+        today = datetime.now().date()
+        two_years_ago = (today - timedelta(days=730)).isoformat()
+        two_years_later = (today + timedelta(days=730)).isoformat()
+
+        # 최신 개찰일 (날짜 범위 필터 적용)
+        latest_result = supabase.table('bid_list')\
+            .select('opening_date')\
+            .gte('opening_date', two_years_ago)\
+            .lte('opening_date', two_years_later)\
+            .order('opening_date', desc=True)\
+            .not_.is_('opening_date', 'null')\
+            .limit(1).execute()
+
+        if latest_result.data and latest_result.data[0]['opening_date']:
+            stats['latest_opening_date'] = latest_result.data[0]['opening_date']
+
+        # 가장 오래된 개찰일 (날짜 범위 필터 적용)
+        oldest_result = supabase.table('bid_list')\
+            .select('opening_date')\
+            .gte('opening_date', two_years_ago)\
+            .lte('opening_date', two_years_later)\
+            .order('opening_date', desc=False)\
+            .not_.is_('opening_date', 'null')\
+            .limit(1).execute()
+
+        if oldest_result.data and oldest_result.data[0]['opening_date']:
+            stats['oldest_opening_date'] = oldest_result.data[0]['opening_date']
+
+        # 총 건수
+        count_result = supabase.table('bid_list')\
+            .select('id', count='exact').execute()
+        stats['total_count'] = count_result.count or 0
+
+        # 마지막 업데이트
+        updated_result = supabase.table('bid_list')\
+            .select('updated_at')\
+            .order('updated_at', desc=True)\
+            .limit(1).execute()
+
+        if updated_result.data and updated_result.data[0]['updated_at']:
+            stats['last_updated'] = updated_result.data[0]['updated_at']
+
+    except Exception as e:
+        # 에러 발생 시 기본값 반환
+        pass
+
+    return stats
+
 def safe_value_compare(val1, val2):
     """None/NaN 안전 비교"""
     # 둘 다 None/NaN인 경우 동일
@@ -633,6 +698,109 @@ def main():
 
         # ========== 입찰 공고 검색 섹션 ==========
         st.markdown('<div class="input-section">', unsafe_allow_html=True)
+
+        # DB 통계 정보 표시
+        try:
+            stats = get_bid_list_stats(SUPABASE_URL, SUPABASE_KEY)
+
+            if stats['total_count'] > 0:
+                # 날짜 포맷팅
+                latest_date_str = "정보 없음"
+                date_range_str = ""
+
+                if stats['latest_opening_date']:
+                    try:
+                        latest_date = pd.to_datetime(stats['latest_opening_date'])
+                        latest_date_str = latest_date.strftime('%Y년 %m월 %d일')
+                    except:
+                        latest_date_str = stats['latest_opening_date']
+
+                if stats['oldest_opening_date'] and stats['latest_opening_date']:
+                    try:
+                        oldest_date = pd.to_datetime(stats['oldest_opening_date'])
+                        date_range_str = f" (DB 범위: {oldest_date.strftime('%Y.%m.%d')} ~ {latest_date.strftime('%Y.%m.%d')})"
+                    except:
+                        pass
+
+                # 업데이트 시간 포맷팅
+                update_time_str = "정보 없음"
+                if stats['last_updated']:
+                    try:
+                        update_time = pd.to_datetime(stats['last_updated'])
+                        now = pd.Timestamp.now(tz=update_time.tz)
+                        time_diff = now - update_time
+
+                        if time_diff.total_seconds() < 60:
+                            update_time_str = "방금 전"
+                        elif time_diff.total_seconds() < 3600:
+                            minutes = int(time_diff.total_seconds() / 60)
+                            update_time_str = f"{minutes}분 전"
+                        elif time_diff.total_seconds() < 86400:
+                            hours = int(time_diff.total_seconds() / 3600)
+                            update_time_str = f"{hours}시간 전"
+                        else:
+                            days = int(time_diff.total_seconds() / 86400)
+                            update_time_str = f"{days}일 전"
+                    except:
+                        update_time_str = "알 수 없음"
+
+                # 정보 박스 표시
+                st.markdown(f"""
+                <div style="
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    padding: 20px;
+                    border-radius: 10px;
+                    margin-bottom: 20px;
+                    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+                ">
+                    <div style="color: white; font-size: 14px; font-weight: 600; margin-bottom: 12px;">
+                        📊 입찰공고 데이터베이스 현황
+                    </div>
+                    <div style="
+                        background: rgba(255, 255, 255, 0.95);
+                        padding: 16px;
+                        border-radius: 8px;
+                        display: grid;
+                        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+                        gap: 16px;
+                    ">
+                        <div>
+                            <div style="color: #667eea; font-size: 12px; font-weight: 600; margin-bottom: 4px;">
+                                📅 최신 개찰일
+                            </div>
+                            <div style="color: #1a202c; font-size: 18px; font-weight: 700;">
+                                {latest_date_str}
+                            </div>
+                        </div>
+                        <div>
+                            <div style="color: #667eea; font-size: 12px; font-weight: 600; margin-bottom: 4px;">
+                                📈 총 공고 수
+                            </div>
+                            <div style="color: #1a202c; font-size: 18px; font-weight: 700;">
+                                {stats['total_count']:,}건
+                            </div>
+                        </div>
+                        <div>
+                            <div style="color: #667eea; font-size: 12px; font-weight: 600; margin-bottom: 4px;">
+                                🔄 마지막 업데이트
+                            </div>
+                            <div style="color: #1a202c; font-size: 18px; font-weight: 700;">
+                                {update_time_str}
+                            </div>
+                        </div>
+                    </div>
+                    <div style="color: rgba(255, 255, 255, 0.9); font-size: 11px; margin-top: 10px; text-align: right;">
+                        💡 {latest_date_str} 이후 공고를 업로드하세요{date_range_str}
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+        except Exception as e:
+            # 에러 로깅 (디버깅용)
+            import traceback
+            print(f"❌ DB 통계 로드 실패: {e}")
+            print(traceback.format_exc())
+            # 사용자에게는 표시하지 않음
+
         st.markdown("### 🔍 입찰 공고 검색")
         st.markdown("공고번호 또는 공고명으로 검색하여 입찰 정보를 자동으로 입력할 수 있습니다.")
 
@@ -713,6 +881,9 @@ def main():
                                     - ✔️ 총 처리: {total_processed}건
                                     - ❌ 오류: {error_count}건
                                     """)
+
+                                    # 캐시 무효화 (DB 통계 즉시 갱신)
+                                    st.cache_data.clear()
 
                                     # 통계 시각화
                                     if total_processed > 0:
