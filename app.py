@@ -745,6 +745,220 @@ def upload_bid_data_from_app(supabase, df):
 
     return True, "업로드 완료", insert_success, update_success, skip_count, error_rows
 
+@st.cache_data(ttl=3600)
+def get_training_model_info():
+    """학습 모델 정보 조회 (캐시 1시간)"""
+    try:
+        model_dir = Path("models/production")
+
+        # 최신 메타데이터 파일 찾기
+        metadata_files = sorted(model_dir.glob("metadata_*.json"), reverse=True)
+        if not metadata_files:
+            return None
+
+        # 메타데이터 로드
+        import json
+        with open(metadata_files[0], 'r', encoding='utf-8') as f:
+            metadata = json.load(f)
+
+        # 학습 데이터에서 날짜 범위 조회
+        try:
+            data_path = Path("data/processed/features_engineered.xlsx")
+            if data_path.exists():
+                df = pd.read_excel(data_path)
+
+                # 날짜 컬럼 찾기 (입력일 또는 개찰일)
+                date_col = None
+                for col in ['입력일', '개찰일']:
+                    if col in df.columns:
+                        date_col = col
+                        break
+
+                if date_col:
+                    # YY.MM.DD 형식 (예: 25.11.17, 24.01.02)을 올바르게 파싱
+                    dates = pd.to_datetime(df[date_col], format='%y.%m.%d', errors='coerce')
+                    date_min = dates.min()
+                    date_max = dates.max()
+                else:
+                    date_min = date_max = None
+            else:
+                date_min = date_max = None
+        except Exception:
+            date_min = date_max = None
+
+        # 이전 모델과 비교 (성능 개선율 계산)
+        old_metadata_files = [f for f in metadata_files if f != metadata_files[0]]
+        improvement = None
+        if old_metadata_files:
+            try:
+                with open(old_metadata_files[0], 'r', encoding='utf-8') as f:
+                    old_metadata = json.load(f)
+
+                old_mape = old_metadata['models']['ensemble']['test_mape']
+                new_mape = metadata['models']['ensemble']['test_mape']
+
+                if old_mape > 0:
+                    improvement = old_mape / new_mape
+            except Exception:
+                pass
+
+        return {
+            'timestamp': metadata['timestamp'],
+            'train_size': metadata['train_size'],
+            'test_size': metadata['test_size'],
+            'total_size': metadata['train_size'] + metadata['test_size'],
+            'date_min': date_min,
+            'date_max': date_max,
+            'features': metadata['features'],
+            'models': metadata['models'],
+            'improvement': improvement
+        }
+
+    except Exception as e:
+        st.error(f"모델 정보 로드 실패: {e}")
+        return None
+
+
+def render_training_model_status():
+    """학습 모델 현황 섹션 렌더링 (옵션 2: 콤팩트 카드 + 펼치기)"""
+    info = get_training_model_info()
+
+    if not info:
+        st.warning("⚠️ 학습 모델 정보를 불러올 수 없습니다.")
+        return
+
+    # 타임스탬프 파싱 (YYYYMMDD_HHMMSS)
+    timestamp_str = info['timestamp']
+    try:
+        dt = datetime.strptime(timestamp_str, '%Y%m%d_%H%M%S')
+        formatted_time = dt.strftime('%Y-%m-%d %H:%M')
+    except:
+        formatted_time = timestamp_str
+
+    # 데이터 기간 포맷
+    if info['date_min'] and info['date_max']:
+        date_range_str = f"{info['date_min'].strftime('%Y-%m')} ~ {info['date_max'].strftime('%Y-%m')}"
+    else:
+        date_range_str = "알 수 없음"
+
+    # Ensemble 모델 성능
+    ensemble = info['models']['ensemble']
+    mape = ensemble['test_mape'] * 100  # 백분율로 변환
+    r2 = ensemble['test_r2']
+
+    # 개선율 계산
+    improvement_text = ""
+    if info['improvement']:
+        improvement_text = f" ({info['improvement']:.0f}배 개선)"
+
+    # 정보 박스 표시 (데이터베이스 현황과 동일한 디자인, 주황색 계열)
+    st.markdown(f"""
+    <div style="
+        background: linear-gradient(135deg, #ff9a56 0%, #ff6b6b 100%);
+        padding: 20px;
+        border-radius: 10px;
+        margin-bottom: 20px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    ">
+        <div style="color: white; font-size: 14px; font-weight: 600; margin-bottom: 12px;">
+            📊 학습 모델 현황
+        </div>
+        <div style="
+            background: rgba(255, 255, 255, 0.95);
+            padding: 16px;
+            border-radius: 8px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+        ">
+            <div>
+                <div style="color: #ff6b6b; font-size: 12px; font-weight: 600; margin-bottom: 4px;">
+                    ✅ 최신 재학습
+                </div>
+                <div style="color: #1a202c; font-size: 18px; font-weight: 700;">
+                    {formatted_time}
+                </div>
+            </div>
+            <div>
+                <div style="color: #ff6b6b; font-size: 12px; font-weight: 600; margin-bottom: 4px;">
+                    📈 학습 데이터
+                </div>
+                <div style="color: #1a202c; font-size: 18px; font-weight: 700;">
+                    {info['total_size']:,}개
+                </div>
+                <div style="color: #718096; font-size: 11px; margin-top: 2px;">
+                    {date_range_str}
+                </div>
+            </div>
+            <div>
+                <div style="color: #ff6b6b; font-size: 12px; font-weight: 600; margin-bottom: 4px;">
+                    🎯 예측 정확도
+                </div>
+                <div style="color: #1a202c; font-size: 18px; font-weight: 700;">
+                    MAPE {mape:.2f}%
+                </div>
+                <div style="color: #718096; font-size: 11px; margin-top: 2px;">
+                    R² {r2:.3f}{improvement_text}
+                </div>
+            </div>
+        </div>
+        <div style="color: rgba(255, 255, 255, 0.9); font-size: 11px; margin-top: 10px; text-align: right;">
+            💡 Ensemble 모델 (Linear 10% + XGBoost 90%)
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # 상세 정보 (펼치기) - 기존 유지
+    with st.expander("📋 상세 정보 보기", expanded=False):
+            col1, col2 = st.columns(2)
+
+            with col1:
+                st.markdown("#### 📊 데이터 분할")
+                st.metric("학습 데이터", f"{info['train_size']:,}개", delta="80%", delta_color="off")
+                st.metric("검증 데이터", f"{info['test_size']:,}개", delta="20%", delta_color="off")
+
+            with col2:
+                st.markdown("#### 🔧 모델 구성")
+                st.markdown(f"""
+                **사용 피처** ({len(info['features'])}개):
+                {', '.join(info['features'])}
+
+                **Weighted Ensemble**:
+                - Linear Regression: {ensemble['lr_weight']*100:.0f}%
+                - XGBoost: {ensemble['xgb_weight']*100:.0f}%
+                """)
+
+            # 성능 개선 정보
+            if info['improvement']:
+                st.success(f"🚀 이전 모델 대비 MAPE {info['improvement']:.0f}배 개선")
+
+            # 모델별 성능 비교
+            st.markdown("#### 📈 모델별 성능")
+            perf_data = {
+                '모델': ['Linear Regression', 'Ridge Regression', 'Weighted Ensemble'],
+                'Test R²': [
+                    info['models']['linear']['test_r2'],
+                    info['models']['ridge']['test_r2'],
+                    info['models']['ensemble']['test_r2']
+                ],
+                'Test MAPE (%)': [
+                    info['models']['linear']['test_mape'] * 100,
+                    info['models']['ridge']['test_mape'] * 100,
+                    info['models']['ensemble']['test_mape'] * 100
+                ]
+            }
+            perf_df = pd.DataFrame(perf_data)
+            st.dataframe(
+                perf_df.style.format({
+                    'Test R²': '{:.3f}',
+                    'Test MAPE (%)': '{:.2f}%'
+                }).highlight_max(subset=['Test R²'], color='lightgreen')
+                  .highlight_min(subset=['Test MAPE (%)'], color='lightgreen'),
+                use_container_width=True,
+                hide_index=True
+            )
+
+
 def main():
     # 헤더
     st.markdown('<div class="main-header">📊 낙찰하한가 예측 시스템</div>', unsafe_allow_html=True)
@@ -1389,6 +1603,9 @@ def main():
     elif menu == "📊 예측 이력":
         st.markdown("## 📊 예측 이력")
 
+        # 학습 모델 현황 표시
+        render_training_model_status()
+
         try:
             # 모든 예측 조회
             response = supabase.table("predictions").select("*").order("created_at", desc=True).execute()
@@ -1402,11 +1619,116 @@ def main():
                 # 그룹별로 정리
                 unique_groups = df['prediction_group_id'].unique()
 
-                st.markdown(f"### 📋 총 {len(unique_groups)}개의 예측 그룹")
+                # ========== 필터 섹션 ==========
+                st.markdown("### 🔍 필터 및 정렬")
+                filter_col1, filter_col2, filter_col3 = st.columns(3)
+
+                with filter_col1:
+                    sort_option = st.selectbox(
+                        "정렬 기준",
+                        options=["최신순", "오래된순", "오차율 낮은순", "오차율 높은순"],
+                        index=0,
+                        key="sort_option"
+                    )
+
+                with filter_col2:
+                    items_per_page = st.selectbox(
+                        "페이지당 표시",
+                        options=[10, 20, 50, "전체"],
+                        index=1,  # 기본값: 20개
+                        key="items_per_page"
+                    )
+
+                with filter_col3:
+                    status_filter = st.selectbox(
+                        "상태 필터",
+                        options=["전체", "완료 (실제값 입력됨)", "대기 (실제값 미입력)"],
+                        index=0,
+                        key="status_filter"
+                    )
+
                 st.markdown("---")
 
-                # 그룹별로 표시
+                # ========== 데이터 필터링 및 정렬 ==========
+                # 그룹별 데이터 준비
+                group_data_list = []
                 for group_id in unique_groups:
+                    group_df = df[df['prediction_group_id'] == group_id].copy()
+                    first_row = group_df.iloc[0]
+
+                    # 실제값 및 오차 정보
+                    actual_value = first_row['actual_nakchalhahan_price']
+                    has_actual = pd.notna(actual_value)
+
+                    # 오차율 계산 (Ensemble 모델 기준)
+                    ensemble_row = group_df[group_df['model_type'] == 'ensemble']
+                    avg_error_rate = None
+                    if not ensemble_row.empty and pd.notna(ensemble_row.iloc[0].get('error_rate')):
+                        avg_error_rate = abs(ensemble_row.iloc[0]['error_rate'])
+
+                    group_data_list.append({
+                        'group_id': group_id,
+                        'created_at': pd.to_datetime(first_row['created_at']),
+                        'created_at_formatted': first_row['created_at_formatted'],
+                        'has_actual': has_actual,
+                        'avg_error_rate': avg_error_rate,
+                        'group_df': group_df
+                    })
+
+                # 상태 필터링
+                if status_filter == "완료 (실제값 입력됨)":
+                    group_data_list = [g for g in group_data_list if g['has_actual']]
+                elif status_filter == "대기 (실제값 미입력)":
+                    group_data_list = [g for g in group_data_list if not g['has_actual']]
+
+                # 정렬
+                if sort_option == "최신순":
+                    group_data_list.sort(key=lambda x: x['created_at'], reverse=True)
+                elif sort_option == "오래된순":
+                    group_data_list.sort(key=lambda x: x['created_at'], reverse=False)
+                elif sort_option == "오차율 낮은순":
+                    # 오차율이 있는 것만 먼저, 그 다음 오차율 오름차순
+                    group_data_list.sort(key=lambda x: (x['avg_error_rate'] is None, x['avg_error_rate'] if x['avg_error_rate'] is not None else float('inf')))
+                elif sort_option == "오차율 높은순":
+                    # 오차율이 있는 것만 먼저, 그 다음 오차율 내림차순
+                    group_data_list.sort(key=lambda x: (x['avg_error_rate'] is None, -(x['avg_error_rate'] if x['avg_error_rate'] is not None else 0)), reverse=False)
+
+                total_groups = len(group_data_list)
+
+                # ========== 페이지네이션 ==========
+                if items_per_page == "전체":
+                    items_per_page_int = total_groups
+                else:
+                    items_per_page_int = int(items_per_page)
+
+                # 세션 상태 초기화
+                if 'current_page' not in st.session_state:
+                    st.session_state.current_page = 1
+
+                # 총 페이지 수 계산
+                total_pages = max(1, (total_groups + items_per_page_int - 1) // items_per_page_int)
+
+                # 현재 페이지가 총 페이지 수를 초과하는 경우 조정
+                if st.session_state.current_page > total_pages:
+                    st.session_state.current_page = total_pages
+
+                # 현재 페이지 데이터 추출
+                start_idx = (st.session_state.current_page - 1) * items_per_page_int
+                end_idx = min(start_idx + items_per_page_int, total_groups)
+                current_page_data = group_data_list[start_idx:end_idx]
+
+                # 페이지 정보 표시
+                if total_groups > 0:
+                    st.markdown(f"### 📋 총 {total_groups}개의 예측 그룹 (현재: {start_idx + 1}-{end_idx})")
+                else:
+                    st.markdown(f"### 📋 총 0개의 예측 그룹")
+
+                st.markdown("---")
+
+                # ========== 예측 그룹 표시 (현재 페이지만) ==========
+                for group_data in current_page_data:
+                    group_id = group_data['group_id']
+                    group_df = group_data['group_df']
                     group_df = df[df['prediction_group_id'] == group_id].copy()
 
                     # 그룹 정보
@@ -1424,9 +1746,33 @@ def main():
                     # 공사명 표시 (NULL인 경우 대체 텍스트)
                     project_display = project_name if pd.notna(project_name) and project_name else "공사명 미입력"
 
+                    # 오차 정보 (Ensemble 모델 기준)
+                    error_info = ""
+                    if pd.notna(actual_value):
+                        ensemble_row = group_df[group_df['model_type'] == 'ensemble']
+                        if not ensemble_row.empty and pd.notna(ensemble_row.iloc[0].get('error_rate')):
+                            error_rate = ensemble_row.iloc[0]['error_rate']
+                            error_sign = "+" if error_rate >= 0 else ""
+
+                            # 최소 오차 모델 찾기
+                            min_abs_error = float('inf')
+                            best_model_name = None
+                            for model_type in ['ridge', 'linear', 'ensemble']:
+                                model_row = group_df[group_df['model_type'] == model_type]
+                                if not model_row.empty and pd.notna(model_row.iloc[0].get('error_rate')):
+                                    abs_err = abs(model_row.iloc[0]['error_rate'])
+                                    if abs_err < min_abs_error:
+                                        min_abs_error = abs_err
+                                        best_model_name = model_row.iloc[0]['model_name']
+
+                            error_info = f" | 오차: {error_sign}{error_rate:.2f}% ({best_model_name} ✅)"
+
+                    # 컴팩트 Expander 제목 (2줄)
+                    expander_title = f"{status_icon} {created_at} | {project_display}\n   기초: {gichogeum}원{error_info if error_info else ' | 실제: ' + actual_text}"
+
                     # Expander로 그룹별 상세 정보 표시
                     with st.expander(
-                        f"{status_icon} {created_at} | 📌 {project_display} | 기초금액: {gichogeum}원 | 실제: {actual_text}",
+                        expander_title,
                         expanded=False
                     ):
                         # 공사명 및 공고번호 표시
@@ -1596,6 +1942,69 @@ def main():
                                     st.session_state[confirm_key] = True
                                     st.warning(f"⚠️ 한 번 더 클릭하면 {len(group_df)}건이 삭제됩니다 (되돌릴 수 없음)")
                                     st.rerun()
+
+                # ========== 페이지네이션 버튼 ==========
+                if total_groups > 0 and items_per_page != "전체":
+                    st.markdown("---")
+
+                    # 페이지 버튼 배치
+                    page_cols = st.columns([1, 3, 1])
+
+                    with page_cols[0]:
+                        if st.session_state.current_page > 1:
+                            if st.button("◀ 이전", use_container_width=True, key="prev_page"):
+                                st.session_state.current_page -= 1
+                                st.rerun()
+
+                    with page_cols[1]:
+                        # 페이지 번호 버튼
+                        max_buttons = 10  # 최대 표시할 페이지 버튼 수
+
+                        # 현재 페이지 기준으로 표시할 페이지 범위 계산
+                        if total_pages <= max_buttons:
+                            page_range = range(1, total_pages + 1)
+                        else:
+                            # 현재 페이지를 중심으로 표시
+                            half = max_buttons // 2
+                            start = max(1, st.session_state.current_page - half)
+                            end = min(total_pages, start + max_buttons - 1)
+
+                            # 끝에 도달한 경우 시작 조정
+                            if end - start < max_buttons - 1:
+                                start = max(1, end - max_buttons + 1)
+
+                            page_range = range(start, end + 1)
+
+                        # 페이지 버튼 생성
+                        button_cols = st.columns(len(page_range))
+                        for idx, page_num in enumerate(page_range):
+                            with button_cols[idx]:
+                                if page_num == st.session_state.current_page:
+                                    # 현재 페이지 (비활성화)
+                                    st.button(
+                                        f"**{page_num}**",
+                                        disabled=True,
+                                        use_container_width=True,
+                                        key=f"page_btn_{page_num}"
+                                    )
+                                else:
+                                    # 다른 페이지 (클릭 가능)
+                                    if st.button(
+                                        str(page_num),
+                                        use_container_width=True,
+                                        key=f"page_btn_{page_num}"
+                                    ):
+                                        st.session_state.current_page = page_num
+                                        st.rerun()
+
+                    with page_cols[2]:
+                        if st.session_state.current_page < total_pages:
+                            if st.button("다음 ▶", use_container_width=True, key="next_page"):
+                                st.session_state.current_page += 1
+                                st.rerun()
+
+                    # 페이지 정보 표시
+                    st.caption(f"페이지 {st.session_state.current_page} / {total_pages}")
 
             else:
                 st.info("📭 아직 저장된 예측이 없습니다.")
