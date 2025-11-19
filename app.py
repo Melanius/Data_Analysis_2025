@@ -16,6 +16,17 @@ from supabase import create_client, Client
 import os
 import uuid
 import re
+import secrets
+import string
+
+# bcrypt 설치 확인 및 자동 설치
+try:
+    import bcrypt
+except ImportError:
+    import subprocess
+    import sys
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "bcrypt", "--break-system-packages"])
+    import bcrypt
 
 # .env 파일 로드 (python-dotenv 없이)
 def load_env():
@@ -164,6 +175,164 @@ def init_supabase():
         st.info("💡 환경변수 SUPABASE_URL과 SUPABASE_KEY를 설정해주세요.")
         st.stop()
     return create_client(SUPABASE_URL, SUPABASE_KEY)
+
+# ================================================================
+# 인증 관련 함수들
+# ================================================================
+
+def hash_password(password: str) -> str:
+    """비밀번호를 bcrypt로 해싱"""
+    password_bytes = password.encode('utf-8')
+    salt = bcrypt.gensalt()
+    password_hash = bcrypt.hashpw(password_bytes, salt)
+    return password_hash.decode('utf-8')
+
+def verify_password(password: str, password_hash: str) -> bool:
+    """비밀번호 검증"""
+    try:
+        return bcrypt.checkpw(password.encode('utf-8'), password_hash.encode('utf-8'))
+    except Exception:
+        return False
+
+def login_user(supabase: Client, username: str, password: str) -> dict | None:
+    """
+    사용자 로그인 검증
+
+    Returns:
+        성공 시: {'id': UUID, 'username': str, 'email': str, 'is_admin': bool}
+        실패 시: None
+    """
+    try:
+        # username으로 사용자 조회
+        response = supabase.table('users').select('*').eq('username', username).execute()
+
+        if not response.data or len(response.data) == 0:
+            return None
+
+        user = response.data[0]
+
+        # 비밀번호 검증
+        if verify_password(password, user['password_hash']):
+            return {
+                'id': user['id'],
+                'username': user['username'],
+                'email': user['email'],
+                'is_admin': user['is_admin']
+            }
+
+        return None
+    except Exception as e:
+        st.error(f"로그인 오류: {e}")
+        return None
+
+def register_user(supabase: Client, username: str, password: str, email: str) -> bool:
+    """
+    신규 사용자 등록
+
+    Returns:
+        성공 시: True
+        실패 시: False
+    """
+    try:
+        # username 중복 체크
+        response = supabase.table('users').select('id').eq('username', username).execute()
+        if response.data and len(response.data) > 0:
+            st.error(f"⚠️ 이미 존재하는 아이디입니다: {username}")
+            return False
+
+        # email 중복 체크
+        response = supabase.table('users').select('id').eq('email', email).execute()
+        if response.data and len(response.data) > 0:
+            st.error(f"⚠️ 이미 등록된 이메일입니다: {email}")
+            return False
+
+        # 비밀번호 길이 검증
+        if len(password) < 6:
+            st.error("⚠️ 비밀번호는 최소 6자 이상이어야 합니다.")
+            return False
+
+        # 비밀번호 해싱
+        password_hash = hash_password(password)
+
+        # 사용자 데이터 삽입
+        user_data = {
+            'username': username,
+            'password_hash': password_hash,
+            'email': email,
+            'is_admin': False  # 일반 사용자로 등록
+        }
+
+        response = supabase.table('users').insert(user_data).execute()
+
+        if response.data:
+            st.success(f"✅ 회원가입이 완료되었습니다! ({username})")
+            return True
+        else:
+            st.error("❌ 회원가입 실패")
+            return False
+
+    except Exception as e:
+        st.error(f"회원가입 오류: {e}")
+        return False
+
+def generate_temp_password(length: int = 8) -> str:
+    """임시 비밀번호 생성 (영문 대소문자 + 숫자)"""
+    characters = string.ascii_letters + string.digits
+    return ''.join(secrets.choice(characters) for _ in range(length))
+
+def reset_password(supabase: Client, email: str) -> str | None:
+    """
+    비밀번호 재설정 (임시 비밀번호 발급)
+
+    Returns:
+        성공 시: 임시 비밀번호 (str)
+        실패 시: None
+    """
+    try:
+        # 이메일로 사용자 조회
+        response = supabase.table('users').select('id, username').eq('email', email).execute()
+
+        if not response.data or len(response.data) == 0:
+            st.error(f"⚠️ 등록되지 않은 이메일입니다: {email}")
+            return None
+
+        user = response.data[0]
+
+        # 임시 비밀번호 생성
+        temp_password = generate_temp_password()
+        temp_password_hash = hash_password(temp_password)
+
+        # 비밀번호 업데이트
+        response = supabase.table('users').update({
+            'password_hash': temp_password_hash
+        }).eq('id', user['id']).execute()
+
+        if response.data:
+            st.success(f"✅ 임시 비밀번호가 발급되었습니다!")
+            st.info(f"📧 이메일: {email}")
+            st.info(f"👤 아이디: {user['username']}")
+            return temp_password
+        else:
+            st.error("❌ 비밀번호 재설정 실패")
+            return None
+
+    except Exception as e:
+        st.error(f"비밀번호 재설정 오류: {e}")
+        return None
+
+def logout_user():
+    """로그아웃 (세션 초기화)"""
+    # 세션에서 사용자 정보 제거
+    if 'user' in st.session_state:
+        del st.session_state.user
+    if 'logged_in' in st.session_state:
+        del st.session_state.logged_in
+    st.success("✅ 로그아웃되었습니다.")
+    st.rerun()
+
+# ================================================================
+# 기존 함수들
+# ================================================================
 
 def search_bid_list(supabase, query):
     """
@@ -959,7 +1128,188 @@ def render_training_model_status():
             )
 
 
+# ================================================================
+# 인증 UI 함수들
+# ================================================================
+
+def show_login_page(supabase: Client):
+    """로그인 페이지"""
+    st.markdown('<div class="main-header">🔐 로그인</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sub-header">낙찰하한가 예측 시스템</div>', unsafe_allow_html=True)
+
+    st.markdown("---")
+
+    col1, col2, col3 = st.columns([1, 2, 1])
+
+    with col2:
+        st.markdown("### 📝 로그인")
+
+        username = st.text_input("아이디", key="login_username", placeholder="아이디를 입력하세요")
+        password = st.text_input("비밀번호", type="password", key="login_password", placeholder="비밀번호를 입력하세요")
+
+        col_btn1, col_btn2 = st.columns(2)
+
+        with col_btn1:
+            if st.button("🔓 로그인", use_container_width=True, type="primary"):
+                if not username or not password:
+                    st.error("⚠️ 아이디와 비밀번호를 모두 입력해주세요.")
+                else:
+                    user_info = login_user(supabase, username, password)
+                    if user_info:
+                        st.session_state.user = user_info
+                        st.session_state.logged_in = True
+                        st.success(f"✅ 환영합니다, {user_info['username']}님!")
+                        st.rerun()
+                    else:
+                        st.error("❌ 아이디 또는 비밀번호가 일치하지 않습니다.")
+
+        with col_btn2:
+            if st.button("📝 회원가입", use_container_width=True):
+                st.session_state.auth_mode = "register"
+                st.rerun()
+
+        st.markdown("---")
+
+        if st.button("🔑 비밀번호 찾기"):
+            st.session_state.auth_mode = "reset_password"
+            st.rerun()
+
+
+def show_register_page(supabase: Client):
+    """회원가입 페이지"""
+    st.markdown('<div class="main-header">📝 회원가입</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sub-header">낙찰하한가 예측 시스템</div>', unsafe_allow_html=True)
+
+    st.markdown("---")
+
+    col1, col2, col3 = st.columns([1, 2, 1])
+
+    with col2:
+        st.markdown("### 👤 회원 정보 입력")
+
+        username = st.text_input("아이디", key="register_username", placeholder="영문, 숫자 조합 (3자 이상)")
+        password = st.text_input("비밀번호", type="password", key="register_password", placeholder="최소 6자 이상")
+        password_confirm = st.text_input("비밀번호 확인", type="password", key="register_password_confirm", placeholder="비밀번호를 다시 입력하세요")
+        email = st.text_input("이메일", key="register_email", placeholder="example@email.com")
+
+        st.markdown("---")
+
+        col_btn1, col_btn2 = st.columns(2)
+
+        with col_btn1:
+            if st.button("✅ 가입하기", use_container_width=True, type="primary"):
+                # 유효성 검사
+                if not username or not password or not password_confirm or not email:
+                    st.error("⚠️ 모든 항목을 입력해주세요.")
+                elif len(username) < 3:
+                    st.error("⚠️ 아이디는 최소 3자 이상이어야 합니다.")
+                elif password != password_confirm:
+                    st.error("⚠️ 비밀번호가 일치하지 않습니다.")
+                elif len(password) < 6:
+                    st.error("⚠️ 비밀번호는 최소 6자 이상이어야 합니다.")
+                elif '@' not in email or '.' not in email:
+                    st.error("⚠️ 올바른 이메일 형식이 아닙니다.")
+                else:
+                    # 회원가입 처리
+                    if register_user(supabase, username, password, email):
+                        st.success("🎉 회원가입이 완료되었습니다! 로그인 페이지로 이동합니다.")
+                        st.session_state.auth_mode = "login"
+                        st.balloons()
+                        st.rerun()
+
+        with col_btn2:
+            if st.button("← 로그인으로", use_container_width=True):
+                st.session_state.auth_mode = "login"
+                st.rerun()
+
+
+def show_password_reset_page(supabase: Client):
+    """비밀번호 찾기 페이지"""
+    st.markdown('<div class="main-header">🔑 비밀번호 찾기</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sub-header">낙찰하한가 예측 시스템</div>', unsafe_allow_html=True)
+
+    st.markdown("---")
+
+    col1, col2, col3 = st.columns([1, 2, 1])
+
+    with col2:
+        st.markdown("### 📧 이메일 인증")
+        st.info("💡 등록된 이메일을 입력하시면 임시 비밀번호를 발급해드립니다.")
+
+        email = st.text_input("등록된 이메일", key="reset_email", placeholder="example@email.com")
+
+        st.markdown("---")
+
+        col_btn1, col_btn2 = st.columns(2)
+
+        with col_btn1:
+            if st.button("🔄 비밀번호 재설정", use_container_width=True, type="primary"):
+                if not email:
+                    st.error("⚠️ 이메일을 입력해주세요.")
+                elif '@' not in email or '.' not in email:
+                    st.error("⚠️ 올바른 이메일 형식이 아닙니다.")
+                else:
+                    temp_password = reset_password(supabase, email)
+                    if temp_password:
+                        st.markdown("---")
+                        st.markdown("### 🔐 임시 비밀번호")
+                        st.code(temp_password, language=None)
+                        st.warning("⚠️ 임시 비밀번호를 복사하여 로그인 후 비밀번호를 변경해주세요!")
+                        st.info("💡 보안을 위해 이 페이지를 새로고침하면 임시 비밀번호가 사라집니다.")
+
+        with col_btn2:
+            if st.button("← 로그인으로", use_container_width=True):
+                st.session_state.auth_mode = "login"
+                st.rerun()
+
+
 def main():
+    """애플리케이션 진입점 (로그인 게이트)"""
+    # Supabase 초기화
+    supabase = init_supabase()
+
+    # 세션 상태 초기화
+    if 'logged_in' not in st.session_state:
+        st.session_state.logged_in = False
+    if 'user' not in st.session_state:
+        st.session_state.user = None
+    if 'auth_mode' not in st.session_state:
+        st.session_state.auth_mode = "login"  # login, register, reset_password
+
+    # 로그인 여부 확인
+    if st.session_state.logged_in and st.session_state.user:
+        # 로그인 상태 - 메인 앱 표시
+        # 사이드바에 사용자 정보와 로그아웃 버튼 추가
+        with st.sidebar:
+            st.markdown("---")
+            st.markdown(f"### 👤 {st.session_state.user['username']}")
+            if st.session_state.user['is_admin']:
+                st.caption("🔑 관리자")
+            else:
+                st.caption("👥 일반 사용자")
+            st.caption(f"📧 {st.session_state.user['email']}")
+
+            if st.button("🚪 로그아웃", use_container_width=True):
+                logout_user()
+
+        # 메인 애플리케이션 실행
+        main_app()
+    else:
+        # 비로그인 상태 - 인증 페이지 표시
+        if st.session_state.auth_mode == "login":
+            show_login_page(supabase)
+        elif st.session_state.auth_mode == "register":
+            show_register_page(supabase)
+        elif st.session_state.auth_mode == "reset_password":
+            show_password_reset_page(supabase)
+
+
+# ================================================================
+# 메인 애플리케이션
+# ================================================================
+
+def main_app():
+    """메인 애플리케이션 (로그인 후 진입)"""
     # 헤더
     st.markdown('<div class="main-header">📊 낙찰하한가 예측 시스템</div>', unsafe_allow_html=True)
     st.markdown('<div class="sub-header">3가지 머신러닝 모델을 통한 정확한 낙찰하한가 예측</div>', unsafe_allow_html=True)
@@ -1585,6 +1935,7 @@ def main():
                             "predicted_yega": float(yega),
                             "predicted_yejeong_price": float(yejeong),
                             "predicted_nakchalhahan_price": float(nakchalhahan),
+                            "user_id": st.session_state.user['id'],  # 현재 로그인한 사용자 ID
                             "created_at": datetime.now().isoformat()
                         }
 
@@ -1607,8 +1958,18 @@ def main():
         render_training_model_status()
 
         try:
-            # 모든 예측 조회
-            response = supabase.table("predictions").select("*").order("created_at", desc=True).execute()
+            # 사용자 권한에 따라 예측 조회
+            if st.session_state.user['is_admin']:
+                # 관리자: 모든 데이터 조회
+                response = supabase.table("predictions").select("*").order("created_at", desc=True).execute()
+            else:
+                # 일반 사용자: 본인 데이터만 조회
+                user_id = st.session_state.user['id']
+                response = (supabase.table("predictions")
+                    .select("*")
+                    .eq("user_id", user_id)
+                    .order("created_at", desc=True)
+                    .execute())
 
             if response.data:
                 df = pd.DataFrame(response.data)
@@ -2017,8 +2378,18 @@ def main():
         st.markdown("## 📈 정확도 분석")
 
         try:
-            # 실제값이 입력된 예측만 조회
-            response = supabase.table("predictions").select("*").not_.is_("actual_nakchalhahan_price", "null").execute()
+            # 사용자 권한에 따라 실제값이 입력된 예측만 조회
+            if st.session_state.user['is_admin']:
+                # 관리자: 모든 데이터 조회
+                response = supabase.table("predictions").select("*").not_.is_("actual_nakchalhahan_price", "null").execute()
+            else:
+                # 일반 사용자: 본인 데이터만 조회
+                user_id = st.session_state.user['id']
+                response = (supabase.table("predictions")
+                    .select("*")
+                    .eq("user_id", user_id)
+                    .not_.is_("actual_nakchalhahan_price", "null")
+                    .execute())
 
             if response.data and len(response.data) > 0:
                 df = pd.DataFrame(response.data)
