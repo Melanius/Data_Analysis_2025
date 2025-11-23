@@ -45,54 +45,211 @@ load_env()
 # 페이지 설정
 st.set_page_config(
     page_title="낙찰하한가 예측 시스템",
-    page_icon="📊",
+    page_icon="📊",  # page_icon은 이모지만 지원
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# CSS 스타일
+# CSS 스타일 - Professional Design System
 st.markdown("""
 <style>
+    /* ============================================
+       Color System - Professional & Consistent
+       ============================================ */
+    :root {
+        --primary-color: #2563eb;
+        --primary-hover: #1d4ed8;
+        --success-color: #10b981;
+        --warning-color: #f59e0b;
+        --danger-color: #ef4444;
+        --neutral-color: #64748b;
+        --background-light: #f8fafc;
+        --background-card: #ffffff;
+        --border-color: #e2e8f0;
+        --text-primary: #1e293b;
+        --text-secondary: #64748b;
+        --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+        --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+    }
+
+    /* ============================================
+       Typography Hierarchy
+       ============================================ */
     .main-header {
-        font-size: 2.5rem;
+        font-size: 2rem;
         font-weight: 700;
-        color: #1f77b4;
+        color: var(--text-primary);
         margin-bottom: 0.5rem;
+        letter-spacing: -0.025em;
     }
     .sub-header {
-        font-size: 1.2rem;
-        color: #666;
+        font-size: 1.125rem;
+        color: var(--text-secondary);
         margin-bottom: 2rem;
+        font-weight: 400;
     }
+
+    /* ============================================
+       Card Components - Clean & Professional
+       ============================================ */
     .metric-card {
-        background-color: #f8f9fa;
-        border-radius: 10px;
+        background-color: var(--background-card);
+        border-radius: 12px;
         padding: 1.5rem;
-        border-left: 4px solid #1f77b4;
+        border: 1px solid var(--border-color);
+        border-left: 4px solid var(--primary-color);
         margin-bottom: 1rem;
+        box-shadow: var(--shadow-sm);
+        transition: all 0.2s ease;
     }
+    .metric-card:hover {
+        box-shadow: var(--shadow-md);
+        transform: translateY(-2px);
+    }
+
+    /* Prediction Cards - Clean Design */
     .prediction-card {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        border-radius: 15px;
+        background: var(--background-card);
+        color: var(--text-primary);
+        border-radius: 12px;
         padding: 1.5rem;
         margin-bottom: 1rem;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        border: 2px solid var(--border-color);
+        box-shadow: var(--shadow-sm);
+        transition: all 0.2s ease;
     }
+    .prediction-card:hover {
+        border-color: var(--primary-color);
+        box-shadow: var(--shadow-md);
+    }
+
     .prediction-card-selected {
-        background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-        color: white;
-        border-radius: 15px;
+        background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+        color: var(--text-primary);
+        border-radius: 12px;
         padding: 1.5rem;
         margin-bottom: 1rem;
-        box-shadow: 0 6px 12px rgba(0,0,0,0.2);
-        border: 3px solid #fff;
+        border: 2px solid var(--primary-color);
+        box-shadow: var(--shadow-lg);
+        position: relative;
     }
+    .prediction-card-selected::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 4px;
+        background: var(--primary-color);
+        border-radius: 12px 12px 0 0;
+    }
+
     .input-section {
-        background-color: #ffffff;
-        border-radius: 10px;
+        background-color: var(--background-card);
+        border-radius: 12px;
         padding: 2rem;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        border: 1px solid var(--border-color);
+        box-shadow: var(--shadow-sm);
+    }
+
+    /* ============================================
+       Streamlit Component Overrides
+       ============================================ */
+
+    /* Success/Error/Warning/Info Messages */
+    div[data-testid="stAlert"] {
+        border-radius: 8px;
+        border-width: 1px;
+        padding: 1rem 1.25rem;
+        font-size: 0.9375rem;
+    }
+
+    /* Success - Green */
+    div[data-testid="stAlert"][data-baseweb="notification"] > div:first-child {
+        background-color: #f0fdf4;
+        border-color: var(--success-color);
+    }
+
+    /* Buttons - Professional Style */
+    .stButton > button {
+        border-radius: 8px;
+        font-weight: 500;
+        padding: 0.5rem 1.5rem;
+        transition: all 0.2s ease;
+        border: 1px solid transparent;
+    }
+    .stButton > button:hover {
+        transform: translateY(-1px);
+        box-shadow: var(--shadow-md);
+    }
+    .stButton > button[kind="primary"] {
+        background-color: var(--primary-color);
+        color: white;
+    }
+    .stButton > button[kind="primary"]:hover {
+        background-color: var(--primary-hover);
+    }
+
+    /* Input Fields */
+    .stTextInput > div > div > input,
+    .stNumberInput > div > div > input,
+    .stSelectbox > div > div {
+        border-radius: 8px;
+        border: 1px solid var(--border-color);
+        padding: 0.5rem 0.75rem;
+    }
+    .stTextInput > div > div > input:focus,
+    .stNumberInput > div > div > input:focus {
+        border-color: var(--primary-color);
+        box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+    }
+
+    /* Expander */
+    .streamlit-expanderHeader {
+        border-radius: 8px;
+        background-color: var(--background-light);
+        border: 1px solid var(--border-color);
+        font-weight: 500;
+    }
+
+    /* Sidebar */
+    section[data-testid="stSidebar"] {
+        background-color: var(--background-light);
+    }
+    section[data-testid="stSidebar"] > div {
+        padding-top: 2rem;
+    }
+
+    /* ============================================
+       Utility Classes
+       ============================================ */
+    .text-sm {
+        font-size: 0.875rem;
+        color: var(--text-secondary);
+    }
+    .text-lg {
+        font-size: 1.125rem;
+        font-weight: 600;
+    }
+    .badge {
+        display: inline-block;
+        padding: 0.25rem 0.75rem;
+        border-radius: 9999px;
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+    .badge-success {
+        background-color: #d1fae5;
+        color: #065f46;
+    }
+    .badge-warning {
+        background-color: #fef3c7;
+        color: #92400e;
+    }
+    .badge-danger {
+        background-color: #fee2e2;
+        color: #991b1b;
     }
 
     /* number input 증감 버튼 숨기기 - Streamlit 전용 */
@@ -171,8 +328,8 @@ except (KeyError, FileNotFoundError, AttributeError):
 def init_supabase():
     """Supabase 클라이언트 초기화"""
     if not SUPABASE_URL or not SUPABASE_KEY:
-        st.error("⚠️ 데이터베이스 연결 정보가 설정되지 않았습니다. 관리자에게 문의하세요.")
-        st.info("💡 환경변수 SUPABASE_URL과 SUPABASE_KEY를 설정해주세요.")
+        st.error(":material/warning: 데이터베이스 연결 정보가 설정되지 않았습니다. 관리자에게 문의하세요.")
+        st.info(":material/lightbulb: 환경변수 SUPABASE_URL과 SUPABASE_KEY를 설정해주세요.")
         st.stop()
     return create_client(SUPABASE_URL, SUPABASE_KEY)
 
@@ -237,18 +394,18 @@ def register_user(supabase: Client, username: str, password: str, email: str) ->
         # username 중복 체크
         response = supabase.table('users').select('id').eq('username', username).execute()
         if response.data and len(response.data) > 0:
-            st.error(f"⚠️ 이미 존재하는 아이디입니다: {username}")
+            st.error(f":material/warning: 이미 존재하는 아이디입니다: {username}")
             return False
 
         # email 중복 체크
         response = supabase.table('users').select('id').eq('email', email).execute()
         if response.data and len(response.data) > 0:
-            st.error(f"⚠️ 이미 등록된 이메일입니다: {email}")
+            st.error(f":material/warning: 이미 등록된 이메일입니다: {email}")
             return False
 
         # 비밀번호 길이 검증
         if len(password) < 6:
-            st.error("⚠️ 비밀번호는 최소 6자 이상이어야 합니다.")
+            st.error(":material/warning: 비밀번호는 최소 6자 이상이어야 합니다.")
             return False
 
         # 비밀번호 해싱
@@ -265,10 +422,10 @@ def register_user(supabase: Client, username: str, password: str, email: str) ->
         response = supabase.table('users').insert(user_data).execute()
 
         if response.data:
-            st.success(f"✅ 회원가입이 완료되었습니다! ({username})")
+            st.success(f":material/check_circle: 회원가입이 완료되었습니다! ({username})")
             return True
         else:
-            st.error("❌ 회원가입 실패")
+            st.error(":material/cancel: 회원가입 실패")
             return False
 
     except Exception as e:
@@ -293,7 +450,7 @@ def reset_password(supabase: Client, email: str) -> str | None:
         response = supabase.table('users').select('id, username').eq('email', email).execute()
 
         if not response.data or len(response.data) == 0:
-            st.error(f"⚠️ 등록되지 않은 이메일입니다: {email}")
+            st.error(f":material/warning: 등록되지 않은 이메일입니다: {email}")
             return None
 
         user = response.data[0]
@@ -308,12 +465,12 @@ def reset_password(supabase: Client, email: str) -> str | None:
         }).eq('id', user['id']).execute()
 
         if response.data:
-            st.success(f"✅ 임시 비밀번호가 발급되었습니다!")
-            st.info(f"📧 이메일: {email}")
-            st.info(f"👤 아이디: {user['username']}")
+            st.success(f":material/check_circle: 임시 비밀번호가 발급되었습니다!")
+            st.info(f":material/email: 이메일: {email}")
+            st.info(f":material/person: 아이디: {user['username']}")
             return temp_password
         else:
-            st.error("❌ 비밀번호 재설정 실패")
+            st.error(":material/cancel: 비밀번호 재설정 실패")
             return None
 
     except Exception as e:
@@ -327,7 +484,7 @@ def logout_user():
         del st.session_state.user
     if 'logged_in' in st.session_state:
         del st.session_state.logged_in
-    st.success("✅ 로그아웃되었습니다.")
+    st.success(":material/check_circle: 로그아웃되었습니다.")
     st.rerun()
 
 # ================================================================
@@ -369,7 +526,7 @@ def load_models():
     ensemble_files = sorted(model_dir.glob("ensemble_model_*.pkl"), reverse=True)
 
     if not (linear_files and ridge_files and ensemble_files):
-        st.error("⚠️ 모델 파일을 찾을 수 없습니다.")
+        st.error(":material/warning: 모델 파일을 찾을 수 없습니다.")
         return None
 
     # 모델 로드
@@ -488,8 +645,8 @@ def create_bid_template():
         # 가이드 시트
         guide_data = {
             '컬럼명': list(sample_data.keys()),
-            '필수여부': ['✅ 필수', '✅ 필수', '선택', '선택', '선택',
-                        '✅ 필수', '✅ 필수', '선택', '✅ 필수', '선택',
+            '필수여부': [':material/check_circle: 필수', ':material/check_circle: 필수', '선택', '선택', '선택',
+                        ':material/check_circle: 필수', ':material/check_circle: 필수', '선택', ':material/check_circle: 필수', '선택',
                         '선택', '선택', '선택', '선택', '선택'],
             '형식': ['텍스트', '텍스트', '텍스트', '텍스트', '텍스트',
                     '숫자', '숫자', '숫자', '숫자', '숫자/텍스트',
@@ -729,7 +886,7 @@ def get_latest_bids(supabase_url, supabase_key, page=1, per_page=10):
         return result.data, total_count
 
     except Exception as e:
-        print(f"❌ 최신 공고 조회 실패: {e}")
+        print(f":material/cancel: 최신 공고 조회 실패: {e}")
         return [], 0
 
 def safe_value_compare(val1, val2):
@@ -993,7 +1150,7 @@ def render_training_model_status():
     info = get_training_model_info()
 
     if not info:
-        st.warning("⚠️ 학습 모델 정보를 불러올 수 없습니다.")
+        st.warning(":material/warning: 학습 모델 정보를 불러올 수 없습니다.")
         return
 
     # 타임스탬프 파싱 (YYYYMMDD_HHMMSS)
@@ -1078,16 +1235,16 @@ def render_training_model_status():
     """, unsafe_allow_html=True)
 
     # 상세 정보 (펼치기) - 기존 유지
-    with st.expander("📋 상세 정보 보기", expanded=False):
+    with st.expander(":material/assignment: 상세 정보 보기", expanded=False):
             col1, col2 = st.columns(2)
 
             with col1:
-                st.markdown("#### 📊 데이터 분할")
+                st.markdown("#### :material/bar_chart: 데이터 분할")
                 st.metric("학습 데이터", f"{info['train_size']:,}개", delta="80%", delta_color="off")
                 st.metric("검증 데이터", f"{info['test_size']:,}개", delta="20%", delta_color="off")
 
             with col2:
-                st.markdown("#### 🔧 모델 구성")
+                st.markdown("#### :material/build: 모델 구성")
                 st.markdown(f"""
                 **사용 피처** ({len(info['features'])}개):
                 {', '.join(info['features'])}
@@ -1099,10 +1256,10 @@ def render_training_model_status():
 
             # 성능 개선 정보
             if info['improvement']:
-                st.success(f"🚀 이전 모델 대비 MAPE {info['improvement']:.0f}배 개선")
+                st.success(f":material/rocket_launch: 이전 모델 대비 MAPE {info['improvement']:.0f}배 개선")
 
             # 모델별 성능 비교
-            st.markdown("#### 📈 모델별 성능")
+            st.markdown("#### :material/trending_up: 모델별 성능")
             perf_data = {
                 '모델': ['Linear Regression', 'Ridge Regression', 'Weighted Ensemble'],
                 'Test R²': [
@@ -1134,15 +1291,15 @@ def render_training_model_status():
 
 def show_login_page(supabase: Client):
     """로그인 페이지"""
-    st.markdown('<div class="main-header">🔐 로그인</div>', unsafe_allow_html=True)
-    st.markdown('<div class="sub-header">낙찰하한가 예측 시스템</div>', unsafe_allow_html=True)
+    st.markdown("## :material/lock: 로그인")
+    st.markdown("낙찰하한가 예측 시스템")
 
     st.markdown("---")
 
     col1, col2, col3 = st.columns([1, 2, 1])
 
     with col2:
-        st.markdown("### 📝 로그인")
+        st.markdown("### :material/edit: 로그인")
 
         username = st.text_input("아이디", key="login_username", placeholder="아이디를 입력하세요")
         password = st.text_input("비밀번호", type="password", key="login_password", placeholder="비밀번호를 입력하세요")
@@ -1150,42 +1307,42 @@ def show_login_page(supabase: Client):
         col_btn1, col_btn2 = st.columns(2)
 
         with col_btn1:
-            if st.button("🔓 로그인", use_container_width=True, type="primary"):
+            if st.button(":material/lock_open: 로그인", use_container_width=True, type="primary"):
                 if not username or not password:
-                    st.error("⚠️ 아이디와 비밀번호를 모두 입력해주세요.")
+                    st.error(":material/warning: 아이디와 비밀번호를 모두 입력해주세요.")
                 else:
                     user_info = login_user(supabase, username, password)
                     if user_info:
                         st.session_state.user = user_info
                         st.session_state.logged_in = True
-                        st.success(f"✅ 환영합니다, {user_info['username']}님!")
+                        st.success(f":material/check_circle: 환영합니다, {user_info['username']}님!")
                         st.rerun()
                     else:
-                        st.error("❌ 아이디 또는 비밀번호가 일치하지 않습니다.")
+                        st.error(":material/cancel: 아이디 또는 비밀번호가 일치하지 않습니다.")
 
         with col_btn2:
-            if st.button("📝 회원가입", use_container_width=True):
+            if st.button(":material/edit: 회원가입", use_container_width=True):
                 st.session_state.auth_mode = "register"
                 st.rerun()
 
         st.markdown("---")
 
-        if st.button("🔑 비밀번호 찾기"):
+        if st.button(":material/key: 비밀번호 찾기"):
             st.session_state.auth_mode = "reset_password"
             st.rerun()
 
 
 def show_register_page(supabase: Client):
     """회원가입 페이지"""
-    st.markdown('<div class="main-header">📝 회원가입</div>', unsafe_allow_html=True)
-    st.markdown('<div class="sub-header">낙찰하한가 예측 시스템</div>', unsafe_allow_html=True)
+    st.markdown("## :material/edit: 회원가입")
+    st.markdown("낙찰하한가 예측 시스템")
 
     st.markdown("---")
 
     col1, col2, col3 = st.columns([1, 2, 1])
 
     with col2:
-        st.markdown("### 👤 회원 정보 입력")
+        st.markdown("### :material/person: 회원 정보 입력")
 
         username = st.text_input("아이디", key="register_username", placeholder="영문, 숫자 조합 (3자 이상)")
         password = st.text_input("비밀번호", type="password", key="register_password", placeholder="최소 6자 이상")
@@ -1197,22 +1354,22 @@ def show_register_page(supabase: Client):
         col_btn1, col_btn2 = st.columns(2)
 
         with col_btn1:
-            if st.button("✅ 가입하기", use_container_width=True, type="primary"):
+            if st.button(":material/check_circle: 가입하기", use_container_width=True, type="primary"):
                 # 유효성 검사
                 if not username or not password or not password_confirm or not email:
-                    st.error("⚠️ 모든 항목을 입력해주세요.")
+                    st.error(":material/warning: 모든 항목을 입력해주세요.")
                 elif len(username) < 3:
-                    st.error("⚠️ 아이디는 최소 3자 이상이어야 합니다.")
+                    st.error(":material/warning: 아이디는 최소 3자 이상이어야 합니다.")
                 elif password != password_confirm:
-                    st.error("⚠️ 비밀번호가 일치하지 않습니다.")
+                    st.error(":material/warning: 비밀번호가 일치하지 않습니다.")
                 elif len(password) < 6:
-                    st.error("⚠️ 비밀번호는 최소 6자 이상이어야 합니다.")
+                    st.error(":material/warning: 비밀번호는 최소 6자 이상이어야 합니다.")
                 elif '@' not in email or '.' not in email:
-                    st.error("⚠️ 올바른 이메일 형식이 아닙니다.")
+                    st.error(":material/warning: 올바른 이메일 형식이 아닙니다.")
                 else:
                     # 회원가입 처리
                     if register_user(supabase, username, password, email):
-                        st.success("🎉 회원가입이 완료되었습니다! 로그인 페이지로 이동합니다.")
+                        st.success(":material/celebration: 회원가입이 완료되었습니다! 로그인 페이지로 이동합니다.")
                         st.session_state.auth_mode = "login"
                         st.balloons()
                         st.rerun()
@@ -1225,7 +1382,7 @@ def show_register_page(supabase: Client):
 
 def show_password_reset_page(supabase: Client):
     """비밀번호 찾기 페이지"""
-    st.markdown('<div class="main-header">🔑 비밀번호 찾기</div>', unsafe_allow_html=True)
+    st.markdown("## :material/key: 비밀번호 찾기")
     st.markdown('<div class="sub-header">낙찰하한가 예측 시스템</div>', unsafe_allow_html=True)
 
     st.markdown("---")
@@ -1233,8 +1390,8 @@ def show_password_reset_page(supabase: Client):
     col1, col2, col3 = st.columns([1, 2, 1])
 
     with col2:
-        st.markdown("### 📧 이메일 인증")
-        st.info("💡 등록된 이메일을 입력하시면 임시 비밀번호를 발급해드립니다.")
+        st.markdown("### :material/email: 이메일 인증")
+        st.info(":material/lightbulb: 등록된 이메일을 입력하시면 임시 비밀번호를 발급해드립니다.")
 
         email = st.text_input("등록된 이메일", key="reset_email", placeholder="example@email.com")
 
@@ -1243,19 +1400,19 @@ def show_password_reset_page(supabase: Client):
         col_btn1, col_btn2 = st.columns(2)
 
         with col_btn1:
-            if st.button("🔄 비밀번호 재설정", use_container_width=True, type="primary"):
+            if st.button(":material/refresh: 비밀번호 재설정", use_container_width=True, type="primary"):
                 if not email:
-                    st.error("⚠️ 이메일을 입력해주세요.")
+                    st.error(":material/warning: 이메일을 입력해주세요.")
                 elif '@' not in email or '.' not in email:
-                    st.error("⚠️ 올바른 이메일 형식이 아닙니다.")
+                    st.error(":material/warning: 올바른 이메일 형식이 아닙니다.")
                 else:
                     temp_password = reset_password(supabase, email)
                     if temp_password:
                         st.markdown("---")
-                        st.markdown("### 🔐 임시 비밀번호")
+                        st.markdown("### :material/lock: 임시 비밀번호")
                         st.code(temp_password, language=None)
-                        st.warning("⚠️ 임시 비밀번호를 복사하여 로그인 후 비밀번호를 변경해주세요!")
-                        st.info("💡 보안을 위해 이 페이지를 새로고침하면 임시 비밀번호가 사라집니다.")
+                        st.warning(":material/warning: 임시 비밀번호를 복사하여 로그인 후 비밀번호를 변경해주세요!")
+                        st.info(":material/lightbulb: 보안을 위해 이 페이지를 새로고침하면 임시 비밀번호가 사라집니다.")
 
         with col_btn2:
             if st.button("← 로그인으로", use_container_width=True):
@@ -1282,14 +1439,14 @@ def main():
         # 사이드바에 사용자 정보와 로그아웃 버튼 추가
         with st.sidebar:
             st.markdown("---")
-            st.markdown(f"### 👤 {st.session_state.user['username']}")
+            st.markdown(f"### :material/person: {st.session_state.user['username']}")
             if st.session_state.user['is_admin']:
-                st.caption("🔑 관리자")
+                st.caption(":material/key: 관리자")
             else:
-                st.caption("👥 일반 사용자")
-            st.caption(f"📧 {st.session_state.user['email']}")
+                st.caption(":material/group: 일반 사용자")
+            st.caption(f":material/email: {st.session_state.user['email']}")
 
-            if st.button("🚪 로그아웃", use_container_width=True):
+            if st.button(":material/door_open: 로그아웃", use_container_width=True):
                 logout_user()
 
         # 메인 애플리케이션 실행
@@ -1311,7 +1468,7 @@ def main():
 def main_app():
     """메인 애플리케이션 (로그인 후 진입)"""
     # 헤더
-    st.markdown('<div class="main-header">📊 낙찰하한가 예측 시스템</div>', unsafe_allow_html=True)
+    st.markdown("# :material/bar_chart: 낙찰하한가 예측 시스템")
     st.markdown('<div class="sub-header">3가지 머신러닝 모델을 통한 정확한 낙찰하한가 예측</div>', unsafe_allow_html=True)
 
     # Supabase 초기화
@@ -1323,16 +1480,16 @@ def main_app():
         return
 
     # 사이드바 - 메뉴
-    st.sidebar.title("📋 메뉴")
+    st.sidebar.title(":material/assignment: 메뉴")
     menu = st.sidebar.radio(
         "기능 선택",
-        ["🎯 예측하기", "📊 예측 이력", "📈 정확도 분석"],
+        [":material/adjust: 예측하기", ":material/bar_chart: 예측 이력", ":material/trending_up: 정확도 분석"],
         label_visibility="collapsed"
     )
 
     # ========== 예측하기 ==========
-    if menu == "🎯 예측하기":
-        st.markdown("## 🎯 낙찰하한가 예측")
+    if menu == ":material/adjust: 예측하기":
+        st.markdown("## :material/adjust: 낙찰하한가 예측")
 
         # ========== 입찰 공고 검색 섹션 ==========
         st.markdown('<div class="input-section">', unsafe_allow_html=True)
@@ -1442,11 +1599,11 @@ def main_app():
         except Exception as e:
             # 에러 로깅 (디버깅용)
             import traceback
-            print(f"❌ DB 통계 로드 실패: {e}")
+            print(f":material/cancel: DB 통계 로드 실패: {e}")
             print(traceback.format_exc())
             # 사용자에게는 표시하지 않음
 
-        st.markdown("### 🔍 입찰 공고 검색")
+        st.markdown("### :material/search: 입찰 공고 검색")
         st.markdown("공고번호 또는 공고명으로 검색하거나, 최신 공고 목록에서 선택하세요.")
 
         # 검색어 입력 + 최신 공고 버튼
@@ -1463,7 +1620,7 @@ def main_app():
 
         with col_search2:
             # 최신 공고 버튼
-            latest_btn_label = "📋 최신 공고 ▼" if st.session_state.get('show_latest_bids', False) else "📋 최신 공고"
+            latest_btn_label = ":material/assignment: 최신 공고 ▼" if st.session_state.get('show_latest_bids', False) else ":material/assignment: 최신 공고"
             if st.button(latest_btn_label, use_container_width=True, help="최신 입력일 기준 공고 목록 보기"):
                 st.session_state.show_latest_bids = not st.session_state.get('show_latest_bids', False)
                 if 'latest_bids_page' not in st.session_state:
@@ -1473,7 +1630,7 @@ def main_app():
         # ========== 최신 공고 목록 (조건부 표시) ==========
         if st.session_state.get('show_latest_bids', False):
             st.markdown("---")
-            st.markdown("#### 📋 최신 입찰 공고")
+            st.markdown("#### :material/assignment: 최신 입찰 공고")
 
             # 페이지 가져오기
             page = st.session_state.get('latest_bids_page', 1)
@@ -1507,7 +1664,7 @@ def main_app():
                             margin-bottom: 10px;
                             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
                         ">
-                            <div style="font-weight: 600; color: #667eea; font-size: 13px;">📌 {bid['bid_number']}</div>
+                            <div style="font-weight: 600; color: #667eea; font-size: 13px;">:material/push_pin: {bid['bid_number']}</div>
                             <div style="font-size: 16px; font-weight: 700; margin: 5px 0; color: #1a202c;">{bid['bid_name'][:80]}{'...' if len(bid['bid_name']) > 80 else ''}</div>
                             <div style="font-size: 13px; color: #666;">
                                 {bid.get('ordering_agency', '-')[:20] if bid.get('ordering_agency') else '-'} •
@@ -1563,7 +1720,7 @@ def main_app():
             # 양식 다운로드 버튼
             template_file = create_bid_template()
             st.download_button(
-                label="📥 양식 다운로드",
+                label=":material/download: 양식 다운로드",
                 data=template_file,
                 file_name=f"입찰공고_업로드_양식_{pd.Timestamp.now().strftime('%Y%m%d')}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -1573,14 +1730,14 @@ def main_app():
 
         with col3:
             # 업로드 버튼 (모달 트리거)
-            if st.button("📤 공고 업로드", use_container_width=True, help="엑셀/CSV 파일로 입찰공고 일괄 업로드"):
+            if st.button(":material/outbox: 공고 업로드", use_container_width=True, help="엑셀/CSV 파일로 입찰공고 일괄 업로드"):
                 st.session_state.show_upload_modal = True
 
         # 업로드 모달
         if st.session_state.get('show_upload_modal', False):
             with st.container():
                 st.markdown("---")
-                st.markdown("#### 📤 입찰공고 일괄 업로드")
+                st.markdown("#### :material/outbox: 입찰공고 일괄 업로드")
 
                 uploaded_file = st.file_uploader(
                     "엑셀 또는 CSV 파일을 선택하세요",
@@ -1591,12 +1748,12 @@ def main_app():
                 col_btn1, col_btn2 = st.columns(2)
 
                 with col_btn1:
-                    if st.button("❌ 취소", use_container_width=True):
+                    if st.button(":material/cancel: 취소", use_container_width=True):
                         st.session_state.show_upload_modal = False
                         st.rerun()
 
                 with col_btn2:
-                    if st.button("✅ 업로드 실행", type="primary", use_container_width=True, disabled=uploaded_file is None):
+                    if st.button(":material/check_circle: 업로드 실행", type="primary", use_container_width=True, disabled=uploaded_file is None):
                         if uploaded_file is not None:
                             try:
                                 # 파일 읽기
@@ -1606,7 +1763,7 @@ def main_app():
                                     df = pd.read_excel(uploaded_file)
 
                                 # 업로드 실행
-                                with st.spinner('📊 데이터 분석 및 업로드 중...'):
+                                with st.spinner(':material/bar_chart: 데이터 분석 및 업로드 중...'):
                                     success, message, insert_count, update_count, skip_count, error_rows = upload_bid_data_from_app(supabase, df)
 
                                 if success:
@@ -1615,14 +1772,14 @@ def main_app():
 
                                     # 성공 메시지
                                     st.success(f"""
-                                    ✅ {message}
+                                    :material/check_circle: {message}
 
-                                    **📊 처리 결과**
+                                    **:material/bar_chart: 처리 결과**
                                     - 🆕 신규 등록: {insert_count}건
-                                    - 🔄 업데이트: {update_count}건
-                                    - ⏭️ 동일 (스킵): {skip_count}건
-                                    - ✔️ 총 처리: {total_processed}건
-                                    - ❌ 오류: {error_count}건
+                                    - :material/refresh: 업데이트: {update_count}건
+                                    - :material/skip_next: 동일 (스킵): {skip_count}건
+                                    - :material/done: 총 처리: {total_processed}건
+                                    - :material/cancel: 오류: {error_count}건
                                     """)
 
                                     # 캐시 무효화 (DB 통계 즉시 갱신)
@@ -1643,14 +1800,14 @@ def main_app():
 
                                     # 오류 상세
                                     if error_count > 0 and error_rows:
-                                        with st.expander("❌ 오류 상세 보기"):
+                                        with st.expander(":material/cancel: 오류 상세 보기"):
                                             error_df = pd.DataFrame(error_rows)
                                             st.dataframe(error_df, use_container_width=True)
 
                                             # CSV 다운로드
                                             csv = error_df.to_csv(index=False, encoding='utf-8-sig')
                                             st.download_button(
-                                                label="📥 오류 목록 다운로드",
+                                                label=":material/download: 오류 목록 다운로드",
                                                 data=csv,
                                                 file_name=f"upload_errors_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.csv",
                                                 mime="text/csv"
@@ -1661,10 +1818,10 @@ def main_app():
                                         st.balloons()
                                     st.rerun()
                                 else:
-                                    st.error(f"❌ {message}")
+                                    st.error(f":material/cancel: {message}")
 
                             except Exception as e:
-                                st.error(f"❌ 파일 처리 실패: {str(e)}")
+                                st.error(f":material/cancel: 파일 처리 실패: {str(e)}")
                                 import traceback
                                 with st.expander("상세 오류"):
                                     st.code(traceback.format_exc())
@@ -1704,7 +1861,7 @@ def main_app():
                                 background-color: #f9f9f9;
                             ">
                                 <div style="font-weight: bold; font-size: 16px; margin-bottom: 8px;">
-                                    📋 {result['bid_name']}
+                                    :material/assignment: {result['bid_name']}
                                 </div>
                                 <div style="color: #666; font-size: 14px; line-height: 1.6;">
                                     <span style="font-weight: 600;">공고번호:</span> {result['bid_number']}<br>
@@ -1722,10 +1879,10 @@ def main_app():
                         )
 
                         # 선택 버튼
-                        if st.button(f"✅ 이 공고 선택", key=f"select_bid_{idx}"):
+                        if st.button(f":material/check_circle: 이 공고 선택", key=f"select_bid_{idx}"):
                             # session_state에 선택된 입찰 정보 저장
                             st.session_state.selected_bid = result
-                            st.success(f"✅ '{result['bid_name']}' 공고가 선택되었습니다. 아래 입력란이 자동으로 채워집니다.")
+                            st.success(f":material/check_circle: '{result['bid_name']}' 공고가 선택되었습니다. 아래 입력란이 자동으로 채워집니다.")
                             st.rerun()
             else:
                 st.info("검색 결과가 없습니다. 다른 검색어를 입력해보세요.")
@@ -1737,7 +1894,7 @@ def main_app():
 
         # ========== 수동 입력 섹션 ==========
         st.markdown('<div class="input-section">', unsafe_allow_html=True)
-        st.markdown("### 📝 입력 정보")
+        st.markdown("### :material/edit: 입력 정보")
 
         # 선택된 입찰이 있으면 자동 입력, 없으면 기본값 사용
         selected_bid = st.session_state.get('selected_bid', None)
@@ -1825,18 +1982,18 @@ def main_app():
         st.markdown('</div>', unsafe_allow_html=True)
 
         # 예측 버튼
-        if st.button("🔮 예측 실행", type="primary", use_container_width=True):
+        if st.button(":material/auto_awesome: 예측 실행", type="primary", use_container_width=True):
             # 공사명 필수 검증
             if not project_name or project_name.strip() == "":
-                st.error("⚠️ 공사명을 입력해주세요!")
+                st.error(":material/warning: 공사명을 입력해주세요!")
                 st.stop()
 
             # 금액 입력 검증
             if chujeong_price == 0:
-                st.error("⚠️ 추정가격을 입력해주세요!")
+                st.error(":material/warning: 추정가격을 입력해주세요!")
                 st.stop()
             if gichogeum == 0:
-                st.error("⚠️ 기초금액을 입력해주세요!")
+                st.error(":material/warning: 기초금액을 입력해주세요!")
                 st.stop()
 
             # 입력 데이터 준비
@@ -1866,13 +2023,13 @@ def main_app():
 
             # 결과 표시
             st.markdown("---")
-            st.markdown("## 🎯 예측 결과")
+            st.markdown("## :material/adjust: 예측 결과")
             st.markdown("##### 3가지 모델의 예측 결과입니다. '저장하기' 버튼으로 모두 저장됩니다.")
 
             cols = st.columns(3)
 
             model_keys = ['ridge', 'linear', 'ensemble']
-            model_icons = ['⭐', '⚡', '🎯']
+            model_icons = [':material/star:', ':material/bolt:', ':material/adjust:']
 
             for idx, (col, model_key, icon) in enumerate(zip(cols, model_keys, model_icons)):
                 with col:
@@ -1898,11 +2055,11 @@ def main_app():
         # 저장 섹션 (예측 실행 후에만 표시)
         if 'yega_predictions' in st.session_state and st.session_state.yega_predictions:
             st.markdown("---")
-            st.markdown("### 💾 예측 저장")
+            st.markdown("### :material/save: 예측 저장")
 
-            st.info("💡 저장하기 버튼을 클릭하면 위의 3가지 모델 예측 결과가 모두 저장됩니다.")
+            st.info(":material/lightbulb: 저장하기 버튼을 클릭하면 위의 3가지 모델 예측 결과가 모두 저장됩니다.")
 
-            if st.button("💾 저장하기 (3개 모델 모두)", type="primary", use_container_width=True):
+            if st.button(":material/save: 저장하기 (3개 모델 모두)", type="primary", use_container_width=True):
                 try:
                     # 그룹 ID 생성
                     group_id = str(uuid.uuid4())
@@ -1941,18 +2098,211 @@ def main_app():
 
                         supabase.table("predictions").insert(data).execute()
 
-                    st.success("✅ 3개 모델의 예측이 모두 저장되었습니다!")
+                    st.success(":material/check_circle: 3개 모델의 예측이 모두 저장되었습니다!")
 
                     # 세션 상태 초기화
                     st.session_state.yega_predictions = None
                     st.session_state.input_data = None
 
                 except Exception as e:
-                    st.error(f"❌ 저장 실패: {str(e)}")
+                    st.error(f":material/cancel: 저장 실패: {str(e)}")
 
     # ========== 예측 이력 ==========
-    elif menu == "📊 예측 이력":
-        st.markdown("## 📊 예측 이력")
+    elif menu == ":material/bar_chart: 예측 이력":
+        st.markdown("## :material/bar_chart: 예측 이력")
+
+        # 상세보기 모달 함수
+        @st.dialog("📋 예측 상세 정보", width="large")
+        def show_detail_modal(group_id, group_df, first_row, actual_value, supabase):
+            """상세 정보 모달"""
+            # 공사명 및 공고번호 표시
+            project_name = first_row.get('project_name', None)
+            project_display = project_name if pd.notna(project_name) and project_name else "공사명 미입력"
+            bid_number_display = first_row.get('bid_number', None)
+            bid_number_text = f" | **:material/assignment: 공고번호**: {bid_number_display}" if pd.notna(bid_number_display) and bid_number_display else ""
+
+            st.info(f"**:material/construction: 공사명**: {project_display}{bid_number_text}")
+
+            # 입력 정보 표시
+            st.markdown("#### :material/edit: 입력 정보")
+            chujeong = format_currency(first_row['chujeong_price'])
+            gichogeum = format_currency(first_row['gichogeum'])
+
+            inner_col1, inner_col2, inner_col3, inner_col4, inner_col5 = st.columns(5)
+            inner_col1.metric("추정가격", chujeong + "원")
+            inner_col2.metric("기초금액", gichogeum + "원")
+            inner_col3.metric("A값", format_currency(first_row['a_value']) + "원")
+            inner_col4.metric("낙찰하한율", f"{first_row['nakchalhahan_rate']:.3f}%")
+            inner_col5.metric("예가변동폭", f"{first_row['yega_range']}")
+
+            st.markdown("---")
+            st.markdown("#### :material/adjust: 모델별 예측 결과")
+
+            # 3개 모델 결과 표시
+            cols = st.columns(3)
+            model_order = ['ridge', 'linear', 'ensemble']
+            model_icons = {'ridge': ':material/star:', 'linear': ':material/bolt:', 'ensemble': ':material/adjust:'}
+
+            # 오차가 있는 경우 최소 오차 모델 찾기
+            best_model = None
+            if pd.notna(actual_value):
+                min_abs_error = float('inf')
+                for model_type in model_order:
+                    model_row = group_df[group_df['model_type'] == model_type].iloc[0]
+                    if pd.notna(model_row.get('error_rate')):
+                        abs_error = abs(model_row['error_rate'])
+                        if abs_error < min_abs_error:
+                            min_abs_error = abs_error
+                            best_model = model_type
+
+            for idx, model_type in enumerate(model_order):
+                model_row = group_df[group_df['model_type'] == model_type].iloc[0]
+
+                with cols[idx]:
+                    icon = model_icons.get(model_type, ':material/bar_chart:')
+                    is_best = (model_type == best_model)
+
+                    # 최소오차 모델 강조 스타일
+                    if is_best:
+                        st.markdown(f"""
+                        <div style="
+                            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+                            padding: 12px;
+                            border-radius: 8px;
+                            margin-bottom: 12px;
+                            box-shadow: 0 4px 6px rgba(16, 185, 129, 0.3);
+                            border: 2px solid #10b981;
+                        ">
+                            <div style="color: white; font-weight: 700; font-size: 14px; margin-bottom: 4px;">
+                                {icon} {model_row['model_name']}
+                            </div>
+                            <div style="
+                                background: rgba(255,255,255,0.9);
+                                color: #10b981;
+                                padding: 4px 8px;
+                                border-radius: 4px;
+                                font-size: 11px;
+                                font-weight: 700;
+                                display: inline-block;
+                            ">⭐ 최소오차 모델</div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    else:
+                        st.markdown(f"**{icon} {model_row['model_name']}**")
+
+                    st.metric("예측 낙찰하한가", format_currency(model_row['predicted_nakchalhahan_price']) + "원")
+                    st.caption(f"예가: {model_row['predicted_yega']:.4f}%")
+
+                    # 오차 정보 표시 (실제값이 입력된 경우)
+                    if pd.notna(actual_value) and pd.notna(model_row.get('error_amount')):
+                        st.markdown("---")
+                        st.markdown(f"**실제**: {format_currency(actual_value)}원")
+
+                        error_amount = model_row['error_amount']
+                        error_rate = model_row['error_rate']
+
+                        # 오차 부호에 따른 표시
+                        error_sign = "+" if error_amount >= 0 else ""
+
+                        st.markdown(f"**오차**: {error_sign}{format_currency(abs(error_amount))}원")
+                        st.markdown(f"**오차율**: {error_sign}{error_rate:.2f}%")
+
+                        # 프로그레스 바 (오차율 시각화)
+                        abs_error_rate = abs(error_rate)
+                        progress_value = min(abs_error_rate / 5.0, 1.0)
+
+                        st.progress(progress_value)
+                        st.caption(f":material/circle: 정확도: {100 - abs_error_rate:.1f}%")
+
+            # 실제값 입력 섹션
+            st.markdown("---")
+            st.markdown("#### :material/edit_note: 실제 낙찰하한가 입력")
+
+            inner_col1, inner_col2, inner_col3, inner_col4 = st.columns([2, 2, 1, 1])
+            with inner_col1:
+                # 기존 값 포맷팅
+                default_actual_value = int(actual_value) if pd.notna(actual_value) else 0
+                actual_input_str = st.text_input(
+                    "실제 낙찰하한가 (원)",
+                    value=format_number_for_display(default_actual_value),
+                    placeholder="예: 85,000,000",
+                    help="실제 낙찰하한가 (쉼표 입력 가능)",
+                    key=f"actual_{group_id}_modal"
+                )
+                actual_input = parse_number_input(actual_input_str)
+
+            with inner_col2:
+                # 기존 날짜 값 가져오기
+                existing_date = first_row.get('bid_announcement_date', None)
+                date_value = None
+                if pd.notna(existing_date) and existing_date:
+                    try:
+                        date_value = pd.to_datetime(existing_date).date()
+                    except (ValueError, AttributeError):
+                        date_value = None
+
+                actual_date = st.date_input(
+                    "낙찰 발표일 (선택사항)",
+                    value=date_value,
+                    min_value=datetime(2020, 1, 1).date(),
+                    max_value=datetime.now().date(),
+                    help="낙찰하한가가 발표된 날짜",
+                    key=f"date_{group_id}_modal"
+                )
+
+            with inner_col3:
+                if st.button(":material/save: 저장", type="primary", use_container_width=True, key=f"save_{group_id}_modal"):
+                    try:
+                        # 해당 그룹의 각 모델별로 오차 계산 및 업데이트
+                        for _, row in group_df.iterrows():
+                            # 오차 계산
+                            predicted_value = row['predicted_nakchalhahan_price']
+                            error_amount = float(actual_input) - predicted_value
+                            error_rate = (error_amount / float(actual_input)) * 100 if actual_input > 0 else 0
+
+                            update_data = {
+                                "actual_nakchalhahan_price": float(actual_input),
+                                "error_amount": float(error_amount),
+                                "error_rate": float(error_rate),
+                                "updated_at": datetime.now().isoformat()
+                            }
+
+                            # 날짜가 선택된 경우에만 추가
+                            if actual_date:
+                                update_data["bid_announcement_date"] = actual_date.isoformat()
+
+                            # 각 레코드 개별 업데이트 (id 기준)
+                            supabase.table("predictions").update(update_data).eq("id", row['id']).execute()
+
+                        st.success(":material/check_circle: 실제값 및 오차 분석이 저장되었습니다!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f":material/cancel: 저장 실패: {str(e)}")
+
+            with inner_col4:
+                confirm_key = f"confirm_delete_{group_id}_modal"
+
+                if st.button(":material/delete: 삭제", type="secondary", use_container_width=True, key=f"delete_{group_id}_modal"):
+                    if st.session_state.get(confirm_key, False):
+                        # 2차 클릭 - 실제 삭제 실행
+                        try:
+                            delete_count = len(group_df)
+                            for _, row in group_df.iterrows():
+                                supabase.table("predictions").delete().eq("id", row['id']).execute()
+
+                            # 확인 상태 초기화
+                            if confirm_key in st.session_state:
+                                del st.session_state[confirm_key]
+
+                            st.success(f":material/check_circle: {delete_count}건의 예측 이력이 삭제되었습니다!")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f":material/cancel: 삭제 실패: {str(e)}")
+                    else:
+                        # 1차 클릭 - 확인 요청
+                        st.session_state[confirm_key] = True
+                        st.warning(f":material/warning: 한 번 더 클릭하면 {len(group_df)}건이 삭제됩니다 (되돌릴 수 없음)")
+                        st.rerun()
 
         # 학습 모델 현황 표시
         render_training_model_status()
@@ -1980,11 +2330,24 @@ def main_app():
                 # 그룹별로 정리
                 unique_groups = df['prediction_group_id'].unique()
 
-                # ========== 필터 섹션 ==========
-                st.markdown("### 🔍 필터 및 정렬")
-                filter_col1, filter_col2, filter_col3 = st.columns(3)
+                # ========== 예측 그룹 헤더 및 필터 ==========
+                # 헤더 placeholder (필터링 후 개수로 업데이트됨)
+                header_placeholder = st.empty()
+
+                # 필터 및 정렬 컨트롤 (3열 레이아웃)
+                filter_col1, filter_col2, filter_col3 = st.columns([2, 1, 1])
 
                 with filter_col1:
+                    # 상태 필터 (라디오 버튼 - 수평 배치)
+                    status_filter = st.radio(
+                        "상태 필터",
+                        options=["ALL", "완료", "대기"],
+                        index=0,
+                        horizontal=True,
+                        key="status_filter_radio"
+                    )
+
+                with filter_col2:
                     sort_option = st.selectbox(
                         "정렬 기준",
                         options=["최신순", "오래된순", "오차율 낮은순", "오차율 높은순"],
@@ -1992,20 +2355,12 @@ def main_app():
                         key="sort_option"
                     )
 
-                with filter_col2:
+                with filter_col3:
                     items_per_page = st.selectbox(
                         "페이지당 표시",
                         options=[10, 20, 50, "전체"],
                         index=1,  # 기본값: 20개
                         key="items_per_page"
-                    )
-
-                with filter_col3:
-                    status_filter = st.selectbox(
-                        "상태 필터",
-                        options=["전체", "완료 (실제값 입력됨)", "대기 (실제값 미입력)"],
-                        index=0,
-                        key="status_filter"
                     )
 
                 st.markdown("---")
@@ -2037,10 +2392,11 @@ def main_app():
                     })
 
                 # 상태 필터링
-                if status_filter == "완료 (실제값 입력됨)":
+                if status_filter == "완료":
                     group_data_list = [g for g in group_data_list if g['has_actual']]
-                elif status_filter == "대기 (실제값 미입력)":
+                elif status_filter == "대기":
                     group_data_list = [g for g in group_data_list if not g['has_actual']]
+                # ALL인 경우 필터링 하지 않음
 
                 # 정렬
                 if sort_option == "최신순":
@@ -2078,16 +2434,17 @@ def main_app():
                 end_idx = min(start_idx + items_per_page_int, total_groups)
                 current_page_data = group_data_list[start_idx:end_idx]
 
-                # 페이지 정보 표시
+                # 헤더 업데이트 (필터링 및 페이지네이션 후)
                 if total_groups > 0:
-                    st.markdown(f"### 📋 총 {total_groups}개의 예측 그룹 (현재: {start_idx + 1}-{end_idx})")
+                    header_placeholder.markdown(f"### :material/assignment: 총 {total_groups}개의 예측 그룹 (현재: {start_idx + 1}-{end_idx})")
                 else:
-                    st.markdown(f"### 📋 총 0개의 예측 그룹")
+                    header_placeholder.markdown(f"### :material/assignment: 총 0개의 예측 그룹")
 
-                st.markdown("---")
+                # ========== 예측 그룹 표시 (현재 페이지만, 2열 그리드) ==========
+                # 2열 그리드 레이아웃 생성
+                col1, col2 = st.columns(2, gap="medium")
 
-                # ========== 예측 그룹 표시 (현재 페이지만) ==========
-                for group_data in current_page_data:
+                for idx, group_data in enumerate(current_page_data):
                     group_id = group_data['group_id']
                     group_df = group_data['group_df']
                     group_df = df[df['prediction_group_id'] == group_id].copy()
@@ -2100,16 +2457,25 @@ def main_app():
                     gichogeum = format_currency(first_row['gichogeum'])
                     actual_value = first_row['actual_nakchalhahan_price']
 
-                    # 실제값 입력 여부 표시
-                    status_icon = "✅" if pd.notna(actual_value) else "⏳"
-                    actual_text = format_currency(actual_value) + "원" if pd.notna(actual_value) else "미입력"
-
                     # 공사명 표시 (NULL인 경우 대체 텍스트)
                     project_display = project_name if pd.notna(project_name) and project_name else "공사명 미입력"
 
+                    # 실제값 입력 여부에 따른 스타일
+                    has_actual = pd.notna(actual_value)
+                    if has_actual:
+                        card_gradient = "linear-gradient(135deg, #10b981 0%, #059669 100%)"  # 녹색
+                        status_badge_bg = "#10b981"
+                        status_badge_text = "✅ 완료"
+                        actual_text = format_currency(actual_value) + "원"
+                    else:
+                        card_gradient = "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)"  # 주황색
+                        status_badge_bg = "#f59e0b"
+                        status_badge_text = "⏳ 대기"
+                        actual_text = "미입력"
+
                     # 오차 정보 (Ensemble 모델 기준)
-                    error_info = ""
-                    if pd.notna(actual_value):
+                    error_display = ""
+                    if has_actual:
                         ensemble_row = group_df[group_df['model_type'] == 'ensemble']
                         if not ensemble_row.empty and pd.notna(ensemble_row.iloc[0].get('error_rate')):
                             error_rate = ensemble_row.iloc[0]['error_rate']
@@ -2126,183 +2492,51 @@ def main_app():
                                         min_abs_error = abs_err
                                         best_model_name = model_row.iloc[0]['model_name']
 
-                            error_info = f" | 오차: {error_sign}{error_rate:.2f}% ({best_model_name} ✅)"
+                            error_display = f"""
+<div style="margin-top: 8px; padding: 8px; background: rgba(255,255,255,0.2); border-radius: 4px;">
+    <div style="font-size: 11px; color: rgba(255,255,255,0.9);">Ensemble 오차율</div>
+    <div style="font-size: 16px; font-weight: 700; color: white;">{error_sign}{error_rate:.2f}%</div>
+    <div style="font-size: 10px; color: rgba(255,255,255,0.8);">최소오차: {best_model_name}</div>
+</div>
+"""
 
-                    # 컴팩트 Expander 제목 (2줄)
-                    expander_title = f"{status_icon} {created_at} | {project_display}\n   기초: {gichogeum}원{error_info if error_info else ' | 실제: ' + actual_text}"
+                    # 대기 카드 플레이스홀더 (높이 통일용)
+                    placeholder_area = ""
+                    if not has_actual:
+                        placeholder_area = """
+<div style="margin-top: 8px; padding: 8px; background: rgba(255,255,255,0.15); border-radius: 4px; border: 1px dashed rgba(255,255,255,0.3);">
+    <div style="font-size: 11px; color: rgba(255,255,255,0.7); text-align: center;">예측 대기 중...</div>
+    <div style="font-size: 10px; color: rgba(255,255,255,0.5); text-align: center; margin-top: 4px;">실제값 입력 시 오차율 표시</div>
+</div>
+"""
 
-                    # Expander로 그룹별 상세 정보 표시
-                    with st.expander(
-                        expander_title,
-                        expanded=False
-                    ):
-                        # 공사명 및 공고번호 표시
-                        bid_number_display = first_row.get('bid_number', None)
-                        bid_number_text = f" | **📋 공고번호**: {bid_number_display}" if pd.notna(bid_number_display) and bid_number_display else ""
-                        st.info(f"**🏗️ 공사명**: {project_display}{bid_number_text}")
+                    # 짝수는 왼쪽 열, 홀수는 오른쪽 열에 배치
+                    with col1 if idx % 2 == 0 else col2:
+                        # 카드형 미리보기 (고정 높이)
+                        st.markdown(f"""<div style="background: {card_gradient}; padding: 14px; border-radius: 8px; margin-bottom: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); min-height: 280px; display: flex; flex-direction: column;">
+    <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 10px;">
+        <div style="width: 100%;">
+            <div style="display: inline-block; background: {status_badge_bg}; color: white; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; margin-bottom: 6px;">{status_badge_text}</div>
+            <div style="color: white; font-size: 16px; font-weight: 700; margin-bottom: 4px;">{project_display}</div>
+            <div style="color: rgba(255,255,255,0.9); font-size: 12px;">📅 {created_at}</div>
+        </div>
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 10px;">
+        <div>
+            <div style="font-size: 10px; color: rgba(255,255,255,0.8);">기초금액</div>
+            <div style="font-size: 14px; font-weight: 600; color: white;">{gichogeum}원</div>
+        </div>
+        <div>
+            <div style="font-size: 10px; color: rgba(255,255,255,0.8);">실제 낙찰하한가</div>
+            <div style="font-size: 14px; font-weight: 600; color: white;">{actual_text}</div>
+        </div>
+    </div>
+    {error_display.strip() if has_actual else placeholder_area}
+</div>""", unsafe_allow_html=True)
 
-                        # 입력 정보 표시
-                        st.markdown("#### 📝 입력 정보")
-                        col1, col2, col3, col4, col5 = st.columns(5)
-                        col1.metric("추정가격", chujeong + "원")
-                        col2.metric("기초금액", gichogeum + "원")
-                        col3.metric("A값", format_currency(first_row['a_value']) + "원")
-                        col4.metric("낙찰하한율", f"{first_row['nakchalhahan_rate']:.3f}%")
-                        col5.metric("예가변동폭", f"{first_row['yega_range']}")
-
-                        st.markdown("---")
-                        st.markdown("#### 🎯 모델별 예측 결과")
-
-                        # 3개 모델 결과 표시
-                        cols = st.columns(3)
-                        model_order = ['ridge', 'linear', 'ensemble']
-                        model_icons = {'ridge': '⭐', 'linear': '⚡', 'ensemble': '🎯'}
-
-                        # 오차가 있는 경우 최소 오차 모델 찾기
-                        best_model = None
-                        if pd.notna(actual_value):
-                            min_abs_error = float('inf')
-                            for model_type in model_order:
-                                model_row = group_df[group_df['model_type'] == model_type].iloc[0]
-                                if pd.notna(model_row.get('error_rate')):
-                                    abs_error = abs(model_row['error_rate'])
-                                    if abs_error < min_abs_error:
-                                        min_abs_error = abs_error
-                                        best_model = model_type
-
-                        for idx, model_type in enumerate(model_order):
-                            model_row = group_df[group_df['model_type'] == model_type].iloc[0]
-
-                            with cols[idx]:
-                                icon = model_icons.get(model_type, '📊')
-                                is_best = (model_type == best_model)
-                                best_badge = " ✅ 최소오차" if is_best else ""
-
-                                st.markdown(f"**{icon} {model_row['model_name']}{best_badge}**")
-                                st.metric("예측 낙찰하한가", format_currency(model_row['predicted_nakchalhahan_price']) + "원")
-                                st.caption(f"예가: {model_row['predicted_yega']:.4f}%")
-
-                                # 오차 정보 표시 (실제값이 입력된 경우)
-                                if pd.notna(actual_value) and pd.notna(model_row.get('error_amount')):
-                                    st.markdown("---")
-                                    st.markdown(f"**실제**: {format_currency(actual_value)}원")
-
-                                    error_amount = model_row['error_amount']
-                                    error_rate = model_row['error_rate']
-
-                                    # 오차 부호에 따른 표시
-                                    error_sign = "+" if error_amount >= 0 else ""
-
-                                    st.markdown(f"**오차**: {error_sign}{format_currency(abs(error_amount))}원")
-                                    st.markdown(f"**오차율**: {error_sign}{error_rate:.2f}%")
-
-                                    # 프로그레스 바 (오차율 시각화)
-                                    abs_error_rate = abs(error_rate)
-                                    # 0-5% 범위로 정규화 (5% 이상은 100%로 표시)
-                                    progress_value = min(abs_error_rate / 5.0, 1.0)
-
-                                    # 색상 선택 (중급 시각화)
-                                    if abs_error_rate <= 1:
-                                        color = "🟢"  # 매우 우수
-                                    elif abs_error_rate <= 3:
-                                        color = "🟡"  # 우수
-                                    else:
-                                        color = "🟠"  # 보통
-
-                                    st.progress(progress_value)
-                                    st.caption(f"{color} 정확도: {100 - abs_error_rate:.1f}%")
-
-                        # 실제값 입력 섹션
-                        st.markdown("---")
-                        st.markdown("#### ✏️ 실제 낙찰하한가 입력")
-
-                        col1, col2, col3, col4 = st.columns([2, 2, 1, 1])
-                        with col1:
-                            # 기존 값 포맷팅
-                            default_actual_value = int(actual_value) if pd.notna(actual_value) else 0
-                            actual_input_str = st.text_input(
-                                "실제 낙찰하한가 (원)",
-                                value=format_number_for_display(default_actual_value),
-                                placeholder="예: 85,000,000",
-                                help="실제 낙찰하한가 (쉼표 입력 가능)",
-                                key=f"actual_{group_id}"
-                            )
-                            actual_input = parse_number_input(actual_input_str)
-
-                        with col2:
-                            # 기존 날짜 값 가져오기
-                            existing_date = first_row.get('bid_announcement_date', None)
-                            date_value = None
-                            if pd.notna(existing_date) and existing_date:
-                                try:
-                                    date_value = pd.to_datetime(existing_date).date()
-                                except (ValueError, AttributeError):
-                                    date_value = None
-
-                            actual_date = st.date_input(
-                                "낙찰 발표일 (선택사항)",
-                                value=date_value,
-                                min_value=datetime(2020, 1, 1).date(),
-                                max_value=datetime.now().date(),
-                                help="낙찰하한가가 발표된 날짜",
-                                key=f"date_{group_id}"
-                            )
-
-                        with col3:
-                            st.markdown("<br>", unsafe_allow_html=True)
-                            if st.button("💾 저장", type="primary", use_container_width=True, key=f"save_{group_id}"):
-                                try:
-                                    # 해당 그룹의 각 모델별로 오차 계산 및 업데이트
-                                    for _, row in group_df.iterrows():
-                                        # 오차 계산
-                                        predicted_value = row['predicted_nakchalhahan_price']
-                                        error_amount = float(actual_input) - predicted_value
-                                        error_rate = (error_amount / float(actual_input)) * 100 if actual_input > 0 else 0
-
-                                        update_data = {
-                                            "actual_nakchalhahan_price": float(actual_input),
-                                            "error_amount": float(error_amount),
-                                            "error_rate": float(error_rate),
-                                            "updated_at": datetime.now().isoformat()
-                                        }
-
-                                        # 날짜가 선택된 경우에만 추가
-                                        if actual_date:
-                                            update_data["bid_announcement_date"] = actual_date.isoformat()
-
-                                        # 각 레코드 개별 업데이트 (id 기준)
-                                        supabase.table("predictions").update(update_data).eq("id", row['id']).execute()
-
-                                    st.success("✅ 실제값 및 오차 분석이 저장되었습니다!")
-                                    st.rerun()
-                                except Exception as e:
-                                    st.error(f"❌ 저장 실패: {str(e)}")
-
-                        with col4:
-                            st.markdown("<br>", unsafe_allow_html=True)
-                            confirm_key = f"confirm_delete_{group_id}"
-
-                            if st.button("🗑️ 삭제", type="secondary", use_container_width=True, key=f"delete_{group_id}"):
-                                if st.session_state.get(confirm_key, False):
-                                    # 2차 클릭 - 실제 삭제 실행
-                                    try:
-                                        delete_count = len(group_df)
-                                        for _, row in group_df.iterrows():
-                                            supabase.table("predictions").delete().eq("id", row['id']).execute()
-
-                                        # 확인 상태 초기화
-                                        if confirm_key in st.session_state:
-                                            del st.session_state[confirm_key]
-
-                                        st.success(f"✅ {delete_count}건의 예측 이력이 삭제되었습니다!")
-                                        st.rerun()
-                                    except Exception as e:
-                                        st.error(f"❌ 삭제 실패: {str(e)}")
-                                else:
-                                    # 1차 클릭 - 확인 요청
-                                    st.session_state[confirm_key] = True
-                                    st.warning(f"⚠️ 한 번 더 클릭하면 {len(group_df)}건이 삭제됩니다 (되돌릴 수 없음)")
-                                    st.rerun()
+                        # 상세보기 버튼
+                        if st.button("📋 상세보기", key=f"detail_{group_id}", use_container_width=True, type="secondary"):
+                            show_detail_modal(group_id, group_df, first_row, actual_value, supabase)
 
                 # ========== 페이지네이션 버튼 ==========
                 if total_groups > 0 and items_per_page != "전체":
@@ -2368,14 +2602,14 @@ def main_app():
                     st.caption(f"페이지 {st.session_state.current_page} / {total_pages}")
 
             else:
-                st.info("📭 아직 저장된 예측이 없습니다.")
+                st.info(":material/mail: 아직 저장된 예측이 없습니다.")
 
         except Exception as e:
-            st.error(f"⚠️ 데이터 조회 실패: {str(e)}")
+            st.error(f":material/warning: 데이터 조회 실패: {str(e)}")
 
     # ========== 정확도 분석 ==========
-    elif menu == "📈 정확도 분석":
-        st.markdown("## 📈 정확도 분석")
+    elif menu == ":material/trending_up: 정확도 분석":
+        st.markdown("## :material/trending_up: 정확도 분석")
 
         try:
             # 사용자 권한에 따라 실제값이 입력된 예측만 조회
@@ -2404,7 +2638,7 @@ def main_app():
                 df['date'] = df['created_at'].dt.date
 
                 # ============ 필터링 UI ============
-                st.markdown("### 🔍 필터 옵션")
+                st.markdown("### :material/search: 필터 옵션")
 
                 col1, col2, col3, col4 = st.columns(4)
 
@@ -2469,15 +2703,15 @@ def main_app():
                     filtered_df = filtered_df[filtered_df['project_name'].str.contains(search_term, case=False, na=False)]
 
                 # 필터 결과 표시
-                st.caption(f"📊 총 {len(df)}건 중 {len(filtered_df)}건 표시")
+                st.caption(f":material/bar_chart: 총 {len(df)}건 중 {len(filtered_df)}건 표시")
 
                 if len(filtered_df) == 0:
-                    st.warning("⚠️ 필터 조건에 맞는 데이터가 없습니다.")
+                    st.warning(":material/warning: 필터 조건에 맞는 데이터가 없습니다.")
                     st.stop()
 
                 # ============ 모델별 성능 요약 ============
                 st.markdown("---")
-                st.markdown("### 📊 모델별 성능 요약")
+                st.markdown("### :material/bar_chart: 모델별 성능 요약")
 
                 model_stats = filtered_df.groupby('model_name').agg({
                     'abs_error_pct': ['mean', 'std', 'count']
@@ -2488,13 +2722,13 @@ def main_app():
 
                 # ============ 차트 섹션 ============
                 st.markdown("---")
-                st.markdown("### 📈 상세 분석 차트")
+                st.markdown("### :material/trending_up: 상세 분석 차트")
 
                 # Row 1: 시간별 정확도 추이 & 오차율 분포
                 col1, col2 = st.columns(2)
 
                 with col1:
-                    st.markdown("#### 📅 시간에 따른 모델 정확도 추이")
+                    st.markdown("#### :material/calendar_month: 시간에 따른 모델 정확도 추이")
                     # 날짜별 평균 오차율
                     time_stats = filtered_df.groupby(['date', 'model_name'])['abs_error_pct'].mean().reset_index()
 
@@ -2518,7 +2752,7 @@ def main_app():
                     st.plotly_chart(fig, use_container_width=True)
 
                 with col2:
-                    st.markdown("#### 📊 오차율 분포 히스토그램")
+                    st.markdown("#### :material/bar_chart: 오차율 분포 히스토그램")
                     fig = go.Figure()
 
                     for model in selected_models:
@@ -2542,7 +2776,7 @@ def main_app():
                 col1, col2 = st.columns(2)
 
                 with col1:
-                    st.markdown("#### 💰 금액 구간별 예측 정확도")
+                    st.markdown("#### :material/payments: 금액 구간별 예측 정확도")
                     # 추정가격 구간 생성
                     filtered_df['price_range'] = pd.cut(
                         filtered_df['chujeong_price'],
@@ -2572,7 +2806,7 @@ def main_app():
                     st.plotly_chart(fig, use_container_width=True)
 
                 with col2:
-                    st.markdown("#### 🏆 모델별 승률 (최고 정확도 달성)")
+                    st.markdown("#### :material/emoji_events: 모델별 승률 (최고 정확도 달성)")
                     # 각 예측 그룹에서 최고 성능 모델 찾기
                     best_models = filtered_df.loc[filtered_df.groupby('prediction_group_id')['abs_error_pct'].idxmin()]
                     win_counts = best_models['model_name'].value_counts()
@@ -2592,7 +2826,7 @@ def main_app():
                     st.plotly_chart(fig, use_container_width=True)
 
                 # Row 3: 박스플롯 (전체 폭)
-                st.markdown("#### 📦 모델별 오차율 분포 (박스플롯)")
+                st.markdown("#### :material/inventory: 모델별 오차율 분포 (박스플롯)")
                 fig = go.Figure()
 
                 for model in selected_models:
@@ -2614,7 +2848,7 @@ def main_app():
                 col1, col2 = st.columns(2)
 
                 with col1:
-                    st.markdown("#### 🎯 예측 vs 실제")
+                    st.markdown("#### :material/adjust: 예측 vs 실제")
                     fig = go.Figure()
 
                     for model in selected_models:
@@ -2646,7 +2880,7 @@ def main_app():
                     st.plotly_chart(fig, use_container_width=True)
 
                 with col2:
-                    st.markdown("#### 📅 월별 예측 활동 및 정확도")
+                    st.markdown("#### :material/calendar_month: 월별 예측 활동 및 정확도")
                     # 월별 데이터 집계
                     filtered_df['month'] = filtered_df['created_at'].dt.to_period('M').astype(str)
                     monthly_stats = filtered_df.groupby('month').agg({
@@ -2688,7 +2922,7 @@ def main_app():
 
                 # ============ 전체 데이터 테이블 ============
                 st.markdown("---")
-                st.markdown("### 📋 전체 예측 내역")
+                st.markdown("### :material/assignment: 전체 예측 내역")
 
                 # 데이터 준비
                 display_df = filtered_df[[
@@ -2715,7 +2949,7 @@ def main_app():
                 with col1:
                     csv = display_df.to_csv(index=False, encoding='utf-8-sig')
                     st.download_button(
-                        label="📥 CSV 다운로드",
+                        label=":material/download: CSV 다운로드",
                         data=csv,
                         file_name=f"prediction_accuracy_{pd.Timestamp.now().strftime('%Y%m%d')}.csv",
                         mime="text/csv"
@@ -2725,10 +2959,10 @@ def main_app():
                 st.dataframe(display_df, use_container_width=True, height=400)
 
             else:
-                st.info("📭 실제값이 입력된 예측이 아직 없습니다.")
+                st.info(":material/mail: 실제값이 입력된 예측이 아직 없습니다.")
 
         except Exception as e:
-            st.error(f"⚠️ 데이터 분석 실패: {str(e)}")
+            st.error(f":material/warning: 데이터 분석 실패: {str(e)}")
             import traceback
             st.code(traceback.format_exc())
 
